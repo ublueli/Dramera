@@ -132,73 +132,99 @@ const SzeneEditor = React.memo(({ feldId, initialContent, onSave, onFocus, onFor
   const historyRef = useRef([]); // Undo-History
   const historyIndexRef = useRef(-1);
   const isUndoRedoRef = useRef(false);
+  const isMountedRef = useRef(true);
   
   // History speichern
   const saveToHistory = () => {
-    if (isUndoRedoRef.current || !editorRef.current) return;
+    if (isUndoRedoRef.current || !editorRef.current || !isMountedRef.current) return;
     
-    const currentContent = editorRef.current.innerHTML;
-    const history = historyRef.current;
-    const currentIndex = historyIndexRef.current;
-    
-    // Wenn wir in der Mitte der History sind, alles danach löschen
-    if (currentIndex < history.length - 1) {
-      historyRef.current = history.slice(0, currentIndex + 1);
+    try {
+      const currentContent = editorRef.current.innerHTML;
+      const history = historyRef.current;
+      const currentIndex = historyIndexRef.current;
+      
+      // Wenn wir in der Mitte der History sind, alles danach löschen
+      if (currentIndex < history.length - 1) {
+        historyRef.current = history.slice(0, currentIndex + 1);
+      }
+      
+      // Nicht speichern wenn identisch mit letztem Eintrag
+      if (history.length > 0 && history[history.length - 1] === currentContent) return;
+      
+      // Hinzufügen (max 50 Einträge)
+      historyRef.current.push(currentContent);
+      if (historyRef.current.length > 50) {
+        historyRef.current.shift();
+      }
+      historyIndexRef.current = historyRef.current.length - 1;
+    } catch (e) {
+      console.warn('saveToHistory error:', e);
     }
-    
-    // Nicht speichern wenn identisch mit letztem Eintrag
-    if (history.length > 0 && history[history.length - 1] === currentContent) return;
-    
-    // Hinzufügen (max 50 Einträge)
-    historyRef.current.push(currentContent);
-    if (historyRef.current.length > 50) {
-      historyRef.current.shift();
-    }
-    historyIndexRef.current = historyRef.current.length - 1;
   };
   
   // Undo
   const undo = () => {
-    if (!editorRef.current || historyIndexRef.current <= 0) return;
+    if (!editorRef.current || historyIndexRef.current <= 0 || !isMountedRef.current) return;
     
-    isUndoRedoRef.current = true;
-    historyIndexRef.current--;
-    editorRef.current.innerHTML = historyRef.current[historyIndexRef.current];
-    onSave(feldId, editorRef.current.innerHTML);
-    
-    setTimeout(() => { isUndoRedoRef.current = false; }, 100);
+    try {
+      isUndoRedoRef.current = true;
+      historyIndexRef.current--;
+      editorRef.current.innerHTML = historyRef.current[historyIndexRef.current];
+      onSave(feldId, editorRef.current.innerHTML);
+      
+      setTimeout(() => { isUndoRedoRef.current = false; }, 100);
+    } catch (e) {
+      console.warn('undo error:', e);
+      isUndoRedoRef.current = false;
+    }
   };
   
   // Redo
   const redo = () => {
-    if (!editorRef.current || historyIndexRef.current >= historyRef.current.length - 1) return;
+    if (!editorRef.current || historyIndexRef.current >= historyRef.current.length - 1 || !isMountedRef.current) return;
     
-    isUndoRedoRef.current = true;
-    historyIndexRef.current++;
-    editorRef.current.innerHTML = historyRef.current[historyIndexRef.current];
-    onSave(feldId, editorRef.current.innerHTML);
-    
-    setTimeout(() => { isUndoRedoRef.current = false; }, 100);
+    try {
+      isUndoRedoRef.current = true;
+      historyIndexRef.current++;
+      editorRef.current.innerHTML = historyRef.current[historyIndexRef.current];
+      onSave(feldId, editorRef.current.innerHTML);
+      
+      setTimeout(() => { isUndoRedoRef.current = false; }, 100);
+    } catch (e) {
+      console.warn('redo error:', e);
+      isUndoRedoRef.current = false;
+    }
   };
   
   // Inhalt nur einmal beim Mount setzen
   useEffect(() => {
+    isMountedRef.current = true;
+    
     if (editorRef.current) {
-      // XSS-Schutz: Sanitize HTML vor dem Einfügen
-      const safeContent = DOMPurify.sanitize(initialContent || '<div class="placeholder">Hier schreiben oder Text einfügen...</div>');
-      editorRef.current.innerHTML = safeContent;
-      // Initial-State in History speichern
-      historyRef.current = [safeContent];
-      historyIndexRef.current = 0;
-      // Ref auch in der Map speichern für applyFormat
-      if (editorRefsMap) {
-        editorRefsMap.current[feldId] = editorRef.current;
+      try {
+        // XSS-Schutz: Sanitize HTML vor dem Einfügen
+        const safeContent = DOMPurify.sanitize(initialContent || '<div class="placeholder">Hier schreiben oder Text einfügen...</div>');
+        editorRef.current.innerHTML = safeContent;
+        // Initial-State in History speichern
+        historyRef.current = [safeContent];
+        historyIndexRef.current = 0;
+        // Ref auch in der Map speichern für applyFormat
+        if (editorRefsMap && editorRefsMap.current) {
+          editorRefsMap.current[feldId] = editorRef.current;
+        }
+      } catch (e) {
+        console.warn('SzeneEditor init error:', e);
       }
     }
-    // Cleanup Timer bei Unmount
+    // Cleanup Timer und Refs bei Unmount
     return () => {
+      isMountedRef.current = false;
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
+      }
+      // Ref aus Map entfernen
+      if (editorRefsMap && editorRefsMap.current && editorRefsMap.current[feldId]) {
+        delete editorRefsMap.current[feldId];
       }
     };
   }, [feldId]); // Nur bei Feld-Wechsel neu setzen
@@ -229,8 +255,12 @@ const SzeneEditor = React.memo(({ feldId, initialContent, onSave, onFocus, onFor
   };
   
   const handleSave = () => {
-    if (editorRef.current) {
-      onSave(feldId, editorRef.current.innerHTML);
+    if (editorRef.current && isMountedRef.current) {
+      try {
+        onSave(feldId, editorRef.current.innerHTML);
+      } catch (e) {
+        console.warn('handleSave error:', e);
+      }
     }
   };
   
@@ -372,17 +402,22 @@ const SzeneEditor = React.memo(({ feldId, initialContent, onSave, onFocus, onFor
       ref={editorRef}
       onFocus={onFocus}
       onBlur={() => {
-        saveToHistory();
-        handleSave();
+        if (isMountedRef.current) {
+          saveToHistory();
+          handleSave();
+        }
       }}
       onInput={() => {
+        if (!isMountedRef.current) return;
         // Verwende lokalen Ref statt globaler Variable
         if (autoSaveTimerRef.current) {
           clearTimeout(autoSaveTimerRef.current);
         }
         autoSaveTimerRef.current = setTimeout(() => {
-          saveToHistory();
-          handleSave();
+          if (isMountedRef.current) {
+            saveToHistory();
+            handleSave();
+          }
         }, 1000);
       }}
       onPaste={handlePaste}
@@ -14892,6 +14927,30 @@ const loadSavedState = () => {
     if (saved) {
       const parsed = JSON.parse(saved);
       console.log('Gespeichertes Projekt geladen:', parsed.data?.projektName);
+      
+      // Sicherstellen dass alle Arrays existieren (Migration von alten Projekten)
+      if (parsed.data) {
+        parsed.data = {
+          ...DEFAULT_DATA,
+          ...parsed.data,
+          // Arrays sicher initialisieren
+          figuren: parsed.data.figuren || [],
+          themen: parsed.data.themen || [],
+          felder: parsed.data.felder || [],
+          szenenIdeen: parsed.data.szenenIdeen || [],
+          vorgaben: parsed.data.vorgaben || [],
+          recherche: parsed.data.recherche || [],
+          // Objekte sicher initialisieren
+          fundament: { ...DEFAULT_DATA.fundament, ...(parsed.data.fundament || {}) },
+          dossier: { ...DEFAULT_DATA.dossier, ...(parsed.data.dossier || {}) },
+          schreibflaecheInhalte: parsed.data.schreibflaecheInhalte || {},
+          impulsfragen_notizen: parsed.data.impulsfragen_notizen || {},
+          figuren_tracking: parsed.data.figuren_tracking || {},
+          themen_tracking: parsed.data.themen_tracking || {},
+          reflexionsNotizen: parsed.data.reflexionsNotizen || {}
+        };
+      }
+      
       return parsed;
     }
   } catch (e) {
@@ -15696,7 +15755,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
           backstory: action.daten.backstory || '',
           physische_eigenheiten: action.daten.physische_eigenheiten || ''
         };
-        setData(prev => ({ ...prev, figuren: [...prev.figuren, neueFigur] }));
+        setData(prev => ({ ...prev, figuren: [...(prev.figuren || []), neueFigur] }));
         return `✅ Figur "${neueFigur.name}" hinzugefügt`;
       }
       
@@ -15727,7 +15786,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
             status: 'entwurf',
             inhalt: ''
           };
-          setData(prev => ({ ...prev, felder: [...prev.felder, neueSzene] }));
+          setData(prev => ({ ...prev, felder: [...(prev.felder || []), neueSzene] }));
           return `✅ Szene "${neueSzene.titel}" zum Zeitstrahl hinzugefügt`;
         } else {
           // Standardmässig als Szenen-Idee ins Material
@@ -15742,7 +15801,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
               action.daten.figuren?.length ? `Figuren: ${action.daten.figuren.join(', ')}` : ''
             ].filter(Boolean).join('\n')
           };
-          setData(prev => ({ ...prev, szenenIdeen: [...prev.szenenIdeen, neueIdee] }));
+          setData(prev => ({ ...prev, szenenIdeen: [...(prev.szenenIdeen || []), neueIdee] }));
           return `✅ Szenen-Idee "${neueIdee.titel}" zu Material hinzugefügt (→ per Drag in Zeitstrahl)`;
         }
       }
@@ -15880,7 +15939,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
           id: `th_ki_${Date.now()}`,
           name: action.daten.name || 'Neues Thema'
         };
-        setData(prev => ({ ...prev, themen: [...prev.themen, neuesThema] }));
+        setData(prev => ({ ...prev, themen: [...(prev.themen || []), neuesThema] }));
         return `✅ Thema "${neuesThema.name}" hinzugefügt`;
       }
       
@@ -15991,7 +16050,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
             ziel: f.ziel || '',
             sprechweise: f.sprechweise || ''
           }));
-          setData(prev => ({ ...prev, figuren: [...prev.figuren, ...neueFiguren] }));
+          setData(prev => ({ ...prev, figuren: [...(prev.figuren || []), ...neueFiguren] }));
           results.push(`${neueFiguren.length} Figuren`);
         }
         
@@ -16001,7 +16060,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
             id: `th_ki_${Date.now()}_${i}`,
             name: typeof t === 'string' ? t : t.name
           }));
-          setData(prev => ({ ...prev, themen: [...prev.themen, ...neueThemen] }));
+          setData(prev => ({ ...prev, themen: [...(prev.themen || []), ...neueThemen] }));
           results.push(`${neueThemen.length} Themen`);
         }
         
@@ -16023,7 +16082,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
             status: 'entwurf',
             inhalt: ''
           }));
-          setData(prev => ({ ...prev, felder: [...prev.felder, ...neueSzenen] }));
+          setData(prev => ({ ...prev, felder: [...(prev.felder || []), ...neueSzenen] }));
           results.push(`${neueSzenen.length} Szenen`);
         }
         
@@ -16748,26 +16807,14 @@ WICHTIGE REGELN:
       };
       
       if (formatClass === 'fmt-dialog') {
-        const colonIndex = text.indexOf(':');
-        if (colonIndex > 0) {
-          const figur = text.slice(0, colonIndex + 1);
-          const dialogText = cleanInlineRegie(text.slice(colonIndex + 1).trim());
-          element.innerHTML = `<span class="figur">${figur}</span><span class="text">${dialogText}</span>`;
-        } else if (text.trim().startsWith('(') || text.trim().startsWith('[') || text.trim().startsWith('*')) {
-          // Regieanweisung - Sterne entfernen
-          element.classList.remove(formatClass);
-          element.classList.add('fmt-regie');
-          let regieText = text.trim();
-          if (regieText.startsWith('*') && regieText.endsWith('*')) {
-            regieText = regieText.slice(1, -1).trim();
-          }
-          if (!regieText.startsWith('(') && !regieText.startsWith('[')) {
-            regieText = `(${regieText})`;
-          }
-          element.textContent = regieText;
-        } else {
-          element.innerHTML = `<span class="figur">?:</span><span class="text">${text}</span>`;
-        }
+        // Einfaches Dialog-Format: Text wird als Dialogtext formatiert
+        // Inline-Regieanweisungen werden automatisch erkannt
+        element.innerHTML = `<span class="text">${cleanInlineRegie(text)}</span>`;
+      } else if (formatClass === 'fmt-figurenname') {
+        // Figurenname: Einfach den Namen, kein Doppelpunkt nötig
+        let name = text.trim();
+        if (name.endsWith(':')) name = name.slice(0, -1).trim();
+        element.textContent = name + ':';
       } else if (formatClass === 'fmt-regie') {
         // Regie-Format direkt gewählt - Sterne entfernen
         let regieText = text.trim();
@@ -16959,9 +17006,9 @@ WICHTIGE REGELN:
   const deleteFromSammlung = (type, id) => setData(p => ({ ...p, [type]: p[type].filter(i => i.id !== id) }));
   const updateFigur = (updatedFigur) => { setData(p => ({ ...p, figuren: p.figuren.map(f => f.id === updatedFigur.id ? updatedFigur : f) })); setSelectedFigur(updatedFigur); };
 
-  const extrahiereAlsFigur = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, figuren: [...p.figuren, { id: `fig${Date.now()}`, name: s }] })); };
-  const extrahiereAlsThema = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, themen: [...p.themen, { id: `th${Date.now()}`, name: s }] })); };
-  const extrahiereAlsSzene = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, { id: `sz${Date.now()}`, titel: s, notizen: '' }] })); };
+  const extrahiereAlsFigur = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, figuren: [...(p.figuren || []), { id: `fig${Date.now()}`, name: s }] })); };
+  const extrahiereAlsThema = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, themen: [...(p.themen || []), { id: `th${Date.now()}`, name: s }] })); };
+  const extrahiereAlsSzene = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), { id: `sz${Date.now()}`, titel: s, notizen: '' }] })); };
 
   // Speichern-Dialog State
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -19021,10 +19068,10 @@ STIL:
 
   const handleDragStart = (e, i) => { setDraggedIndex(i); e.dataTransfer.effectAllowed = 'move'; };
   const handleDragOver = (e, i) => { e.preventDefault(); };
-  const handleDrop = (e, targetIndex) => { e.preventDefault(); if (draggedIndex === null || draggedIndex === targetIndex) return; const f = [...data.felder]; const [d] = f.splice(draggedIndex, 1); f.splice(targetIndex, 0, d); f.forEach((x, i) => x.position = i); setData(p => ({ ...p, felder: f })); setDraggedIndex(null); };
+  const handleDrop = (e, targetIndex) => { e.preventDefault(); if (draggedIndex === null || draggedIndex === targetIndex) return; const f = [...(data.felder || [])]; const [d] = f.splice(draggedIndex, 1); f.splice(targetIndex, 0, d); f.forEach((x, i) => x.position = i); setData(p => ({ ...p, felder: f })); setDraggedIndex(null); };
 
   const updateFeld = (feldId, updates) => { setData(p => ({ ...p, felder: p.felder.map(f => f.id === feldId ? { ...f, ...updates } : f) })); if (ausgewaehltesFeld?.id === feldId) setAusgewaehltesFeld(p => ({ ...p, ...updates })); };
-  const addFeld = (titel) => { const n = { id: `f${Date.now()}`, titel, position: data.felder.length, figuren: [], themen: [], notizen: '', zusammenfassung: '', ziel: '', widerstand: '', wendepunkt: '', figuren_ziele: [], gespraechsart: '', status: 'idee', inhalt: '' }; setData(p => ({ ...p, felder: [...p.felder, n] })); };
+  const addFeld = (titel) => { const n = { id: `f${Date.now()}`, titel, position: (data.felder || []).length, figuren: [], themen: [], notizen: '', zusammenfassung: '', ziel: '', widerstand: '', wendepunkt: '', figuren_ziele: [], gespraechsart: '', status: 'idee', inhalt: '' }; setData(p => ({ ...p, felder: [...(p.felder || []), n] })); };
   const deleteFeld = (id) => { setData(p => ({ ...p, felder: p.felder.filter(f => f.id !== id).map((f, i) => ({ ...f, position: i })) })); setAusgewaehltesFeld(null); };
   const szeneZuZeitstrahl = (s) => { addFeld(s.titel); setData(p => ({ ...p, szenenIdeen: p.szenenIdeen.filter(x => x.id !== s.id) })); };
   const addFigurToFeld = (id) => { if (!ausgewaehltesFeld || ausgewaehltesFeld.figuren.includes(id)) return; updateFeld(ausgewaehltesFeld.id, { figuren: [...ausgewaehltesFeld.figuren, id] }); };
@@ -19164,7 +19211,7 @@ STIL:
 
   const handleWertequadratSelect = (q) => setData(p => ({ ...p, wertequadrat: q }));
   const handleWertequadratZuordnung = (zuordnung) => setData(p => ({ ...p, wertequadrat_zuordnung: zuordnung }));
-  const handleThemeSelect = (theme) => { if (!data.themen.find(t => t.name === theme.name)) setData(p => ({ ...p, themen: [...p.themen, { id: `th-${Date.now()}`, name: theme.name, contrast: theme.contrast }] })); };
+  const handleThemeSelect = (theme) => { if (!(data.themen || []).find(t => t.name === theme.name)) setData(p => ({ ...p, themen: [...(p.themen || []), { id: `th-${Date.now()}`, name: theme.name, contrast: theme.contrast }] })); };
   const handleSituationSelect = (situation) => {
     setData(p => {
       // Toggle: Wenn schon ausgewählt, entfernen; sonst hinzufügen
@@ -19563,7 +19610,7 @@ STIL:
       />;
       // Situationen
       case 'szene': return <SzeneTool value={data.aktuelle_szene} onChange={(v) => setData(p => ({ ...p, aktuelle_szene: v }))} onAddToSchreibflaeche={addToSchreibflaeche} />;
-      case 'leerstellen': return <LeerstellenFinder figuren={data.figuren} szenenIdeen={data.szenenIdeen} themen={data.themen} konflikte={data.fundament?.konflikt} onNavigate={(type, id) => { if (type === 'figur') { setSelectedFigur(data.figuren.find(f => f.id === id)); setAktivesWerkzeug('figur'); } else if (type === 'szene') { setSelectedSzeneIdee(data.szenenIdeen.find(s => s.id === id)); setAktivesWerkzeug('szenenidee_bearbeiten'); }}} onCreateSzene={(prefill) => { const neueIdee = { id: `sz${Date.now()}`, titel: prefill.titel || 'Neue Situation', beschreibung: prefill.beschreibung || '', figuren: prefill.figuren || [], ort: prefill.ort || '' }; setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, neueIdee] })); setSelectedSzeneIdee(neueIdee); setAktivesWerkzeug('szenenidee_bearbeiten'); }} />;
+      case 'leerstellen': return <LeerstellenFinder figuren={data.figuren} szenenIdeen={data.szenenIdeen} themen={data.themen} konflikte={data.fundament?.konflikt} onNavigate={(type, id) => { if (type === 'figur') { setSelectedFigur(data.figuren.find(f => f.id === id)); setAktivesWerkzeug('figur'); } else if (type === 'szene') { setSelectedSzeneIdee(data.szenenIdeen.find(s => s.id === id)); setAktivesWerkzeug('szenenidee_bearbeiten'); }}} onCreateSzene={(prefill) => { const neueIdee = { id: `sz${Date.now()}`, titel: prefill.titel || 'Neue Situation', beschreibung: prefill.beschreibung || '', figuren: prefill.figuren || [], ort: prefill.ort || '' }; setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), neueIdee] })); setSelectedSzeneIdee(neueIdee); setAktivesWerkzeug('szenenidee_bearbeiten'); }} />;
       case 'situationsfinder': return <SituationsfinderTool onSelect={handleSituationSelect} selectedSituations={data.selectedSituations || []} onAddToSchreibflaeche={addToSchreibflaeche} />;
       // Material-Bearbeitung
       case 'szenenidee_bearbeiten': 
@@ -19606,7 +19653,7 @@ STIL:
             beschreibung: beschreibung,
             figuren: figurenIds
           };
-          setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, neueIdee] }));
+          setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), neueIdee] }));
         }}
       />;
       case 'spannung': return <SpannungTool
@@ -19614,7 +19661,7 @@ STIL:
         onChange={(v) => setData(p => ({ ...p, spannungsIdeen: v }))}
         onAddToSchreibflaeche={addToSchreibflaeche}
         onCreateSzene={(szenenIdee) => {
-          setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, szenenIdee] }));
+          setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), szenenIdee] }));
         }}
       />;
       case 'intrige': return <IntrigeTool 
@@ -19632,7 +19679,7 @@ STIL:
             beschreibung: beschreibung,
             figuren: figurenIds
           };
-          setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, neueIdee] }));
+          setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), neueIdee] }));
         }}
       />;
       // Raum & Zeit
@@ -25044,7 +25091,7 @@ STIL:
         .meta-figuren, .meta-themen { font-size: 0.5rem; opacity: 0.7; }
         
         /* Arbeitsblatt-Bereich (unten) */
-        .arbeitsblatt-bereich { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #e8e4df; }
+        .arbeitsblatt-bereich { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #f5f1eb; }
         
         /* Formatierungs-Toolbar */
         .format-toolbar-main { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 1rem; background: #fff; border-bottom: 1px solid #e0dbd2; flex-shrink: 0; flex-wrap: wrap; }
@@ -25073,19 +25120,19 @@ STIL:
         .format-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.6rem; background: #6b4423; color: #fff; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
         .format-badge.format-none { background: #e5e0d7; color: #8b7355; }
         
-        /* Arbeitsblatt Scroll */
-        .arbeitsblatt-scroll { flex: 1; overflow-y: auto; padding: 1rem; display: flex; justify-content: center; }
-        .arbeitsblatt { background: #fff; width: 100%; max-width: 21cm; min-height: 29.7cm; box-shadow: 0 4px 20px rgba(0,0,0,0.15); flex-shrink: 0; }
-        .arbeitsblatt-header { padding: 1.5cm 2cm 0.75cm; border-bottom: 1px solid #e0dbd2; }
-        .arbeitsblatt-titel { font-family: 'Cormorant Garamond', serif; font-size: 20pt; font-weight: 700; color: #1a1a1a; }
-        .arbeitsblatt-content { padding: 0.75cm 2cm 2cm; }
-        .arbeitsblatt-empty { color: #8b7355; font-style: italic; text-align: center; padding: 2rem; }
+        /* Arbeitsblatt Scroll - kein Papier mehr */
+        .arbeitsblatt-scroll { flex: 1; overflow-y: auto; padding: 1rem 2rem; }
+        .arbeitsblatt { background: transparent; width: 100%; max-width: none; min-height: auto; box-shadow: none; }
+        .arbeitsblatt-header { padding: 0.5rem 0 0.75rem; border-bottom: 1px solid #d8cfc0; margin-bottom: 1rem; }
+        .arbeitsblatt-titel { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; font-weight: 700; color: #4a4035; }
+        .arbeitsblatt-content { padding: 0; }
+        .arbeitsblatt-empty { color: #8b7355; font-style: italic; text-align: center; padding: 2rem; background: #fff; border-radius: 8px; }
         
-        /* Szene Block */
-        .szene-block { margin-bottom: 0.5cm; padding-bottom: 0.5cm; border-bottom: 1px solid #f0ebe5; }
-        .szene-block.selected { background: #fffbf5; margin: -0.25cm; padding: 0.25cm; padding-bottom: 0.75cm; border: 2px solid #6b4423; border-radius: 4px; }
-        .szene-header { display: flex; justify-content: space-between; align-items: flex-start; cursor: pointer; padding: 0.25cm 0; }
-        .szene-header:hover { background: #fdfbf8; }
+        /* Szene Block - ohne Papier-Look */
+        .szene-block { margin-bottom: 1rem; padding: 1rem; background: #fff; border-radius: 8px; border-left: 4px solid #d8cfc0; }
+        .szene-block.selected { background: #fffbf5; border: 2px solid #6b4423; border-left-width: 4px; }
+        .szene-header { display: flex; justify-content: space-between; align-items: flex-start; cursor: pointer; padding: 0.25rem 0; }
+        .szene-header:hover { background: #fdfbf8; border-radius: 4px; }
         .szene-header-left { display: flex; align-items: baseline; gap: 0.3cm; flex: 1; }
         .szene-nummer { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10pt; color: #8b7355; }
         .szene-titel-text { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14pt; font-weight: 600; color: #1a1a1a; }
@@ -25169,19 +25216,24 @@ STIL:
         .szene-editor .fmt-dialog {
           font-family: 'Courier New', Courier, monospace;
           font-size: 12pt;
-          margin-top: 6pt;
-          margin-bottom: 6pt;
-          line-height: 1.3;
+          margin-top: 0;
+          margin-bottom: 0;
+          margin-left: 3cm;
+          line-height: 1.5;
           color: #1a1a1a;
-          display: flex;
           text-decoration: none;
         }
-        .szene-editor .fmt-dialog .figur {
-          width: 2.5cm;
-          flex-shrink: 0;
-        }
         .szene-editor .fmt-dialog .text {
-          flex: 1;
+          display: block;
+        }
+        .szene-editor .fmt-figurenname {
+          font-family: 'Courier New', Courier, monospace;
+          font-size: 12pt;
+          margin-top: 12pt;
+          margin-bottom: 0;
+          line-height: 1.5;
+          color: #1a1a1a;
+          font-weight: normal;
         }
         .szene-editor .inline-regie,
         .szene-editor em.inline-regie {
@@ -31027,7 +31079,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         beduerfnis: pendingVorlageFigur.need,
                         praegung: pendingVorlageFigur.ghost
                       };
-                      setData(p => ({ ...p, figuren: [...p.figuren, neueFigur] }));
+                      setData(p => ({ ...p, figuren: [...(p.figuren || []), neueFigur] }));
                       setSelectedFigur(neueFigur);
                       setAktivesWerkzeug('figur');
                       setPendingVorlageFigur(null);
@@ -31062,7 +31114,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                       beduerfnis: pendingVorlageFigur.need,
                       praegung: pendingVorlageFigur.ghost
                     };
-                    setData(p => ({ ...p, figuren: [...p.figuren, neueFigur] }));
+                    setData(p => ({ ...p, figuren: [...(p.figuren || []), neueFigur] }));
                     setSelectedFigur(neueFigur);
                     setAktivesWerkzeug('figur');
                     setPendingVorlageFigur(null);
@@ -31129,7 +31181,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                               name: theme.name,
                               contrast: theme.contrast
                             };
-                            setData(p => ({ ...p, themen: [...p.themen, neuesThema] }));
+                            setData(p => ({ ...p, themen: [...(p.themen || []), neuesThema] }));
                             setSelectedThema(neuesThema);
                             setAktivesWerkzeug('thema_bearbeiten');
                             setShowThemenbrowser(false);
@@ -31208,7 +31260,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                                 beschreibung: situation.desc,
                                 figuren: []
                               };
-                              setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, neueIdee] }));
+                              setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), neueIdee] }));
                               setSelectedSzeneIdee(neueIdee);
                               setAktivesWerkzeug('szene');
                               setShowSituationsfinder(false);
@@ -31313,7 +31365,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                       beschreibung: beschreibung,
                       figuren: figurenIds
                     };
-                    setData(p => ({ ...p, szenenIdeen: [...p.szenenIdeen, neueIdee] }));
+                    setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), neueIdee] }));
                     setSelectedSzeneIdee(neueIdee);
                     setAktivesWerkzeug('szenenidee_bearbeiten');
                     setPendingSituation(null);
