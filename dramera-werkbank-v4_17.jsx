@@ -14980,7 +14980,15 @@ export default function DrameraWerkbank() {
   const autoSaveTimerRef = useRef(null); // Für Autosave-Debounce
   
   // === GEFÜHRTER MODUS (Schreibfläche) ===
-  const [guidedMode, setGuidedMode] = useState(savedState?.guidedMode || DEFAULT_GUIDED_MODE);
+  const [guidedMode, setGuidedMode] = useState(() => {
+    const saved = savedState?.guidedMode;
+    if (!saved) return DEFAULT_GUIDED_MODE;
+    return {
+      ...DEFAULT_GUIDED_MODE,
+      ...saved,
+      answers: { ...DEFAULT_GUIDED_MODE.answers, ...(saved.answers || {}) }
+    };
+  });
   
   // === STRUKTURHILFE ===
   const [showStrukturhilfe, setShowStrukturhilfe] = useState(false);
@@ -19134,7 +19142,7 @@ STIL:
     setData(prev => ({
       ...prev,
       szenenStrukturZuordnung: {
-        ...prev.szenenStrukturZuordnung,
+        ...(prev.szenenStrukturZuordnung || {}),
         [szeneId]: abschnittIndex
       }
     }));
@@ -19143,7 +19151,7 @@ STIL:
   // Manuelle Zuordnung einer Szene entfernen
   const removeSzeneAbschnittZuordnung = (szeneId) => {
     setData(prev => {
-      const newZuordnung = { ...prev.szenenStrukturZuordnung };
+      const newZuordnung = { ...(prev.szenenStrukturZuordnung || {}) };
       delete newZuordnung[szeneId];
       return { ...prev, szenenStrukturZuordnung: newZuordnung };
     });
@@ -19297,7 +19305,7 @@ STIL:
     setData(p => ({
       ...p,
       figuren_tracking: {
-        ...p.figuren_tracking,
+        ...(p.figuren_tracking || {}),
         [figurId]: {
           ...(p.figuren_tracking?.[figurId] || {}),
           [szeneId]: {
@@ -19313,7 +19321,7 @@ STIL:
     setData(p => ({
       ...p,
       themen_tracking: {
-        ...p.themen_tracking,
+        ...(p.themen_tracking || {}),
         [themaId]: {
           ...(p.themen_tracking?.[themaId] || {}),
           [szeneId]: {
@@ -19515,23 +19523,23 @@ STIL:
   const renderWerkzeugInhalt = () => {
     switch (aktivesWerkzeug) {
       // Impulsfragen
-      case 'impulsfragen_fundament': return <ImpulsfragenTool rubrik="fundament" notizen={data.impulsfragen_notizen?.fundament} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...p.impulsfragen_notizen, [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
-      case 'impulsfragen_thema': return <ImpulsfragenTool rubrik="thema" notizen={data.impulsfragen_notizen?.thema} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...p.impulsfragen_notizen, [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
-      case 'impulsfragen_figuren': return <ImpulsfragenTool rubrik="figuren" notizen={data.impulsfragen_notizen?.figuren} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...p.impulsfragen_notizen, [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
-      case 'impulsfragen_situationen': return <ImpulsfragenTool rubrik="situationen" notizen={data.impulsfragen_notizen?.situationen} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...p.impulsfragen_notizen, [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
-      case 'impulsfragen_raum_zeit': return <ImpulsfragenTool rubrik="raum_zeit" notizen={data.impulsfragen_notizen?.raum_zeit} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...p.impulsfragen_notizen, [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
+      case 'impulsfragen_fundament': return <ImpulsfragenTool rubrik="fundament" notizen={data.impulsfragen_notizen?.fundament} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...(p.impulsfragen_notizen || {}), [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
+      case 'impulsfragen_thema': return <ImpulsfragenTool rubrik="thema" notizen={data.impulsfragen_notizen?.thema} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...(p.impulsfragen_notizen || {}), [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
+      case 'impulsfragen_figuren': return <ImpulsfragenTool rubrik="figuren" notizen={data.impulsfragen_notizen?.figuren} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...(p.impulsfragen_notizen || {}), [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
+      case 'impulsfragen_situationen': return <ImpulsfragenTool rubrik="situationen" notizen={data.impulsfragen_notizen?.situationen} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...(p.impulsfragen_notizen || {}), [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
+      case 'impulsfragen_raum_zeit': return <ImpulsfragenTool rubrik="raum_zeit" notizen={data.impulsfragen_notizen?.raum_zeit} onNotizenChange={(rubrik, text) => setData(p => ({ ...p, impulsfragen_notizen: { ...(p.impulsfragen_notizen || {}), [rubrik]: text }}))} onAddToSchreibflaeche={addToSchreibflaeche} />;
       // Fundament
       case 'autor': return <AutorTool value={data.autor} onChange={(v) => setData(p => ({ ...p, autor: v }))} onAddToSchreibflaeche={addToSchreibflaeche} />;
-      case 'titel': return <TitelTaglineTool value={data.fundament?.titel} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, titel: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
-      case 'logline': return <LoglineTool value={data.fundament?.logline} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, logline: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
-      case 'konflikt': return <KonfliktTool value={data.fundament?.konflikt} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, konflikt: v }}))} figuren={data.figuren} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
-      case 'kern': return <KernDerGeschichteTool value={data.fundament?.kern} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, kern: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
-      case 'unaussprechliches': return <UnaussprechlichesTool value={data.fundament?.unaussprechliches} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, unaussprechliches: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
-      case 'emotionale_bewegung': return <EmotionaleBewegungTool value={data.fundament?.emotionale_bewegung} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, emotionale_bewegung: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'titel': return <TitelTaglineTool value={data.fundament?.titel} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), titel: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'logline': return <LoglineTool value={data.fundament?.logline} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), logline: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'konflikt': return <KonfliktTool value={data.fundament?.konflikt} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), konflikt: v }}))} figuren={data.figuren} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'kern': return <KernDerGeschichteTool value={data.fundament?.kern} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), kern: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'unaussprechliches': return <UnaussprechlichesTool value={data.fundament?.unaussprechliches} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), unaussprechliches: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'emotionale_bewegung': return <EmotionaleBewegungTool value={data.fundament?.emotionale_bewegung} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), emotionale_bewegung: v }}))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
       // Legacy (für alte Daten, nicht mehr im Menü)
-      case 'zumutung': return <ZumutungTool value={data.fundament?.zumutung} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, zumutung: v }}))} />;
-      case 'weltgesetz': return <WeltgesetzTool value={data.fundament?.weltgesetz} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, weltgesetz: v }}))} />;
-      case 'innerer_widerstand': return <InnererWiderstandTool value={data.fundament?.innerer_widerstand} onChange={(v) => setData(p => ({ ...p, fundament: { ...p.fundament, innerer_widerstand: v }}))} />;
+      case 'zumutung': return <ZumutungTool value={data.fundament?.zumutung} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), zumutung: v }}))} />;
+      case 'weltgesetz': return <WeltgesetzTool value={data.fundament?.weltgesetz} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), weltgesetz: v }}))} />;
+      case 'innerer_widerstand': return <InnererWiderstandTool value={data.fundament?.innerer_widerstand} onChange={(v) => setData(p => ({ ...p, fundament: { ...(p.fundament || {}), innerer_widerstand: v }}))} />;
       // Thema
       case 'thema': return <ThemaTool value={data.themaDetails} onChange={(v) => setData(p => ({ ...p, themaDetails: v }))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
       case 'wertequadrat': return <WertequadratTool 
@@ -19718,7 +19726,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprechinstanzen_wer || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprechinstanzen_wer: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprechinstanzen_wer: e.target.value }
                 }))}
                 placeholder="Menschen, Stimmen, Kollektive..."
                 rows={2}
@@ -19730,7 +19738,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprechinstanzen_anonym || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprechinstanzen_anonym: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprechinstanzen_anonym: e.target.value }
                 }))}
                 placeholder="A, B, C / STIMME / ECHO..."
                 rows={2}
@@ -19742,7 +19750,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprechinstanzen_nichtmenschlich || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprechinstanzen_nichtmenschlich: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprechinstanzen_nichtmenschlich: e.target.value }
                 }))}
                 placeholder="Das Haus erzählt / Die Stadt erinnert sich..."
                 rows={2}
@@ -19754,7 +19762,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprechinstanzen_chor || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprechinstanzen_chor: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprechinstanzen_chor: e.target.value }
                 }))}
                 placeholder="Die Nachbarn / Die Toten / Die, die schweigen..."
                 rows={2}
@@ -19766,7 +19774,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprechinstanzen_schweigen || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprechinstanzen_schweigen: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprechinstanzen_schweigen: e.target.value }
                 }))}
                 placeholder="Die Abwesenden, die Zeugen..."
                 rows={2}
@@ -19819,7 +19827,7 @@ STIL:
                 value={data.offeneFormNotizen?.textflaechen_textur || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, textflaechen_textur: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), textflaechen_textur: e.target.value }
                 }))}
                 placeholder="Atemlos / zäh / stakkatohaft / fliessend..."
                 rows={2}
@@ -19831,7 +19839,7 @@ STIL:
                 value={data.offeneFormNotizen?.textflaechen_pausen || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, textflaechen_pausen: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), textflaechen_pausen: e.target.value }
                 }))}
                 placeholder="Wo atmet der Text? Wo erstickt er?"
                 rows={2}
@@ -19843,7 +19851,7 @@ STIL:
                 value={data.offeneFormNotizen?.textflaechen_wiederholung || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, textflaechen_wiederholung: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), textflaechen_wiederholung: e.target.value }
                 }))}
                 placeholder="Sätze, Motive, Rhythmen, die wiederkehren..."
                 rows={2}
@@ -19855,7 +19863,7 @@ STIL:
                 value={data.offeneFormNotizen?.textflaechen_klang || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, textflaechen_klang: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), textflaechen_klang: e.target.value }
                 }))}
                 placeholder="Musikalität, Rhythmus, Klangfarbe..."
                 rows={2}
@@ -19906,7 +19914,7 @@ STIL:
                 value={data.offeneFormNotizen?.material_aussen || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, material_aussen: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), material_aussen: e.target.value }
                 }))}
                 placeholder="Texte, Bilder, Sounds, die nicht von dir sind..."
                 rows={2}
@@ -19918,7 +19926,7 @@ STIL:
                 value={data.offeneFormNotizen?.material_dokumente || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, material_dokumente: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), material_dokumente: e.target.value }
                 }))}
                 placeholder="Protokolle, Briefe, Zeitungsausschnitte, Interviews..."
                 rows={2}
@@ -19930,7 +19938,7 @@ STIL:
                 value={data.offeneFormNotizen?.material_verwendung || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, material_verwendung: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), material_verwendung: e.target.value }
                 }))}
                 placeholder="Zitiert, parodiert, kommentiert, kontrastiert..."
                 rows={2}
@@ -19942,7 +19950,7 @@ STIL:
                 value={data.offeneFormNotizen?.material_fremdkoerper || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, material_fremdkoerper: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), material_fremdkoerper: e.target.value }
                 }))}
                 placeholder="Das Unpassende, das trotzdem richtig ist..."
                 rows={2}
@@ -19993,7 +20001,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprache_register || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprache_register: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprache_register: e.target.value }
                 }))}
                 placeholder="Hochsprache, Dialekt, Jargon, Bürokratie, Werbung..."
                 rows={2}
@@ -20005,7 +20013,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprache_phrasen || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprache_phrasen: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprache_phrasen: e.target.value }
                 }))}
                 placeholder="Floskeln, die hohl klingen, aber Macht haben..."
                 rows={2}
@@ -20017,7 +20025,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprache_intertextualitaet || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprache_intertextualitaet: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprache_intertextualitaet: e.target.value }
                 }))}
                 placeholder="Welche Texte schwingen mit?"
                 rows={2}
@@ -20029,7 +20037,7 @@ STIL:
                 value={data.offeneFormNotizen?.sprache_musikalitaet || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, sprache_musikalitaet: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), sprache_musikalitaet: e.target.value }
                 }))}
                 placeholder="Tempo, Wiederholung, Variation, Pause..."
                 rows={2}
@@ -20079,7 +20087,7 @@ STIL:
                 value={data.offeneFormNotizen?.performativ_einzigartig || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, performativ_einzigartig: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), performativ_einzigartig: e.target.value }
                 }))}
                 placeholder="Das Unwiederholbare, das Ereignis..."
                 rows={2}
@@ -20091,7 +20099,7 @@ STIL:
                 value={data.offeneFormNotizen?.performativ_publikum || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, performativ_publikum: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), performativ_publikum: e.target.value }
                 }))}
                 placeholder="Beobachten, mitmachen, entscheiden..."
                 rows={2}
@@ -20103,7 +20111,7 @@ STIL:
                 value={data.offeneFormNotizen?.performativ_raum || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, performativ_raum: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), performativ_raum: e.target.value }
                 }))}
                 placeholder="Frontal, im Kreis, begehbar, verteilt..."
                 rows={2}
@@ -20115,7 +20123,7 @@ STIL:
                 value={data.offeneFormNotizen?.performativ_medien || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, performativ_medien: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), performativ_medien: e.target.value }
                 }))}
                 placeholder="Video, Sound, Licht als eigenständige Elemente..."
                 rows={2}
@@ -20127,7 +20135,7 @@ STIL:
                 value={data.offeneFormNotizen?.performativ_koerper || ''} 
                 onChange={(e) => setData(p => ({ 
                   ...p, 
-                  offeneFormNotizen: { ...p.offeneFormNotizen, performativ_koerper: e.target.value }
+                  offeneFormNotizen: { ...(p.offeneFormNotizen || {}), performativ_koerper: e.target.value }
                 }))}
                 placeholder="Präsenz, Bewegung, Stillstand..."
                 rows={2}
@@ -20176,7 +20184,7 @@ STIL:
             <input 
               type="text"
               value={data.stoffrecherche?.kern || ''} 
-              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...p.stoffrecherche, kern: e.target.value }}))}
+              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...(p.stoffrecherche || {}), kern: e.target.value }}))}
               placeholder="Worum geht es im Kern?"
             />
           </div>
@@ -20184,7 +20192,7 @@ STIL:
             <label>These / Hypothese:</label>
             <textarea 
               value={data.stoffrecherche?.these || ''} 
-              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...p.stoffrecherche, these: e.target.value }}))}
+              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...(p.stoffrecherche || {}), these: e.target.value }}))}
               placeholder="Was ist die Grundannahme? Was will ich behaupten oder fragen?"
               rows={2}
             />
@@ -20200,7 +20208,7 @@ STIL:
                   onChange={(e) => {
                     const neu = [...(data.stoffrecherche?.aspekte || ['', '', '', '', ''])];
                     neu[idx] = e.target.value;
-                    setData(p => ({ ...p, stoffrecherche: { ...p.stoffrecherche, aspekte: neu }}));
+                    setData(p => ({ ...p, stoffrecherche: { ...(p.stoffrecherche || {}), aspekte: neu }}));
                   }}
                   placeholder={`Aspekt ${idx + 1}`}
                 />
@@ -20210,7 +20218,7 @@ STIL:
                 onClick={() => setData(p => ({ 
                   ...p, 
                   stoffrecherche: { 
-                    ...p.stoffrecherche, 
+                    ...(p.stoffrecherche || {}), 
                     aspekte: [...(p.stoffrecherche?.aspekte || []), ''] 
                   }
                 }))}
@@ -20223,7 +20231,7 @@ STIL:
             <label>Quellen (Bücher, Archive, Zeitzeugen, Orte, Experten):</label>
             <textarea 
               value={data.stoffrecherche?.quellen || ''} 
-              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...p.stoffrecherche, quellen: e.target.value }}))}
+              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...(p.stoffrecherche || {}), quellen: e.target.value }}))}
               placeholder="Welche Quellen gibt es? Was muss noch recherchiert werden?"
               rows={4}
             />
@@ -20232,7 +20240,7 @@ STIL:
             <label>Zielgruppe & Wirkung:</label>
             <textarea 
               value={data.stoffrecherche?.zielgruppe || ''} 
-              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...p.stoffrecherche, zielgruppe: e.target.value }}))}
+              onChange={(e) => setData(p => ({ ...p, stoffrecherche: { ...(p.stoffrecherche || {}), zielgruppe: e.target.value }}))}
               placeholder="Wer ist das Publikum? Was soll ausgelöst werden?"
               rows={2}
             />
@@ -25180,7 +25188,7 @@ STIL:
           font-size: 12pt;
           margin-top: 0;
           margin-bottom: 0;
-          margin-left: 3cm;
+          margin-left: 2.5cm;
           line-height: 1.5;
           color: #1a1a1a;
           text-decoration: none;
@@ -25193,6 +25201,7 @@ STIL:
           font-size: 12pt;
           margin-top: 12pt;
           margin-bottom: 0;
+          margin-left: 0;
           line-height: 1.5;
           color: #1a1a1a;
           font-weight: normal;
@@ -28235,14 +28244,14 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                           {Object.entries(GEFUEHRTE_PFADE.E.varianten).map(([id, variante]) => (
                             <button 
                               key={id}
-                              className={`variant-card ${guidedMode.answers.E?.variante === id ? 'selected' : ''}`}
+                              className={`variant-card ${guidedMode.answers?.E?.variante === id ? 'selected' : ''}`}
                               onClick={() => {
                                 setGuidedMode(prev => ({
                                   ...prev,
                                   currentStep: 1,
                                   answers: {
-                                    ...prev.answers,
-                                    E: { ...prev.answers.E, variante: id }
+                                    ...(prev.answers || {}),
+                                    E: { ...(prev.answers?.E || {}), variante: id }
                                   }
                                 }));
                               }}
@@ -28400,9 +28409,9 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                               setGuidedMode(prev => ({
                                 ...prev,
                                 answers: {
-                                  ...prev.answers,
+                                  ...(prev.answers || {}),
                                   [guidedMode.activePath]: {
-                                    ...prev.answers[guidedMode.activePath],
+                                    ...((prev.answers || {})[guidedMode.activePath] || {}),
                                     [currentFrage.nr]: e.target.value
                                   }
                                 }
