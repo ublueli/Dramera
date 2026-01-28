@@ -16747,9 +16747,16 @@ WICHTIGE REGELN:
       };
       
       if (formatClass === 'fmt-dialog') {
-        // Einfaches Dialog-Format: Text wird als Dialogtext formatiert
-        // Inline-Regieanweisungen werden automatisch erkannt
-        element.innerHTML = `<span class="text">${cleanInlineRegie(text)}</span>`;
+        // Dialog-Format: Wenn Text mit "Name:" beginnt, extrahiere den Namen
+        const colonMatch = text.match(/^([^:]+):\s*/);
+        if (colonMatch) {
+          const figurName = colonMatch[1].trim();
+          const dialogText = text.slice(colonMatch[0].length);
+          element.innerHTML = `<span class="figur">${figurName}:</span><span class="text">${cleanInlineRegie(dialogText)}</span>`;
+        } else {
+          // Nur Dialogtext ohne Namen
+          element.innerHTML = `<span class="text">${cleanInlineRegie(text)}</span>`;
+        }
       } else if (formatClass === 'fmt-figurenname') {
         // Figurenname: Einfach den Namen, kein Doppelpunkt nötig
         let name = text.trim();
@@ -25097,6 +25104,10 @@ STIL:
         .fmt-select:hover { border-color: #c9a96e; }
         .fmt-select:focus { outline: none; border-color: #6b4423; }
         .fmt-select.fmt-size { width: 55px; }
+        .fmt-select.fmt-font { width: 100px; }
+        .spacing-group { display: flex; align-items: center; gap: 0.25rem; }
+        .spacing-label { font-size: 0.7rem; color: #8b7355; }
+        .fmt-btn.fmt-spacing { padding: 0.2rem 0.4rem; font-size: 0.7rem; }
         .current-format-display { margin-left: auto; }
         .format-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.6rem; background: #6b4423; color: #fff; border-radius: 4px; font-size: 0.7rem; font-weight: 500; }
         .format-badge.format-none { background: #e5e0d7; color: #8b7355; }
@@ -25199,19 +25210,18 @@ STIL:
           font-size: 12pt;
           margin-top: 0;
           margin-bottom: 0;
-          margin-left: 0;
+          margin-left: 4cm;
           line-height: 1.5;
           color: #1a1a1a;
           text-decoration: none;
         }
         .szene-editor .fmt-dialog .figur {
           display: block;
-          margin-left: 2cm;
+          margin-left: -2cm;
           margin-top: 12pt;
         }
         .szene-editor .fmt-dialog .text {
           display: block;
-          margin-left: 6cm;
         }
         .szene-editor .fmt-figurenname {
           font-family: 'Courier New', Courier, monospace;
@@ -25290,7 +25300,7 @@ STIL:
         /* Feld Sections */
         .feld-section { margin-bottom: 0.75rem; }
         .feld-label { font-size: 0.7rem; font-weight: 600; color: #8b7355; text-transform: uppercase; letter-spacing: 0.03em; display: block; margin-bottom: 0.25rem; }
-        .zusammenfassung-input { height: auto; min-height: 2.5rem; }
+        .zusammenfassung-input { height: auto; min-height: 8rem; }
         
         /* Szene Dramaturgie (Ziel/Widerstand/Veränderung) */
         .szene-dramaturgie { 
@@ -28147,9 +28157,9 @@ STIL:
                   {/* Extrahieren-Buttons nur im freien Modus */}
                   {!guidedMode.active && (
                     <div className="extract-btns">
-                      <button onClick={extrahiereAlsFigur} className="extract-btn figur">+ Figur</button>
-                      <button onClick={extrahiereAlsThema} className="extract-btn thema">+ Thema</button>
-                      <button onClick={extrahiereAlsSzene} className="extract-btn szene">+ Szene</button>
+                      <button onMouseDown={(e) => { e.preventDefault(); extrahiereAlsFigur(); }} className="extract-btn figur">+ Figur</button>
+                      <button onMouseDown={(e) => { e.preventDefault(); extrahiereAlsThema(); }} className="extract-btn thema">+ Thema</button>
+                      <button onMouseDown={(e) => { e.preventDefault(); extrahiereAlsSzene(); }} className="extract-btn szene">+ Szene</button>
                     </div>
                   )}
                 </div>
@@ -29030,8 +29040,39 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         value={currentFormat || 'normal'}
                         onChange={(e) => {
                           if (e.target.value === 'normal') {
-                            // Normal = Formatierung entfernen
-                            document.execCommand('removeFormat');
+                            // Normal = Formatierung komplett entfernen
+                            const selection = window.getSelection();
+                            if (!selection || selection.rangeCount === 0) return;
+                            const range = selection.getRangeAt(0);
+                            
+                            // Finde den Editor
+                            let editorNode = range.startContainer;
+                            while (editorNode && !editorNode.classList?.contains('szene-editor')) {
+                              editorNode = editorNode.parentNode;
+                            }
+                            if (!editorNode) return;
+                            
+                            // Finde alle DIVs in der Auswahl
+                            const children = Array.from(editorNode.childNodes);
+                            for (const child of children) {
+                              if (range.intersectsNode(child) && child.classList) {
+                                // Entferne alle fmt-* Klassen
+                                const oldClasses = Array.from(child.classList).filter(c => c.startsWith('fmt-'));
+                                oldClasses.forEach(c => child.classList.remove(c));
+                                // Setze reinen Text
+                                const text = child.textContent;
+                                child.innerHTML = text;
+                              }
+                            }
+                            
+                            // Trigger Save
+                            const feldId = Object.keys(editorRefs.current).find(id => editorRefs.current[id] === editorNode);
+                            if (feldId) {
+                              setData(p => ({
+                                ...p,
+                                felder: (p.felder || []).map(f => f.id === feldId ? { ...f, inhalt: editorNode.innerHTML } : f)
+                              }));
+                            }
                           } else {
                             applyFormat(e.target.value);
                           }
@@ -29047,6 +29088,26 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         <option value="fmt-vers">📜 Vers</option>
                         <option value="fmt-lied">🎵 Lied</option>
                         <option value="fmt-notiz">💡 Notiz</option>
+                      </select>
+                    </div>
+                    
+                    <div className="format-divider" />
+                    
+                    {/* Schriftart */}
+                    <div className="format-group">
+                      <select 
+                        className="fmt-select fmt-font"
+                        onChange={(e) => {
+                          document.execCommand('fontName', false, e.target.value);
+                        }}
+                        defaultValue="Courier New"
+                      >
+                        <option value="Courier New">Courier</option>
+                        <option value="Georgia">Georgia</option>
+                        <option value="Times New Roman">Times</option>
+                        <option value="Arial">Arial</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Verdana">Verdana</option>
                       </select>
                     </div>
                     
@@ -29103,6 +29164,69 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                     <div className="format-group">
                       <button className="fmt-btn" title="Einrücken" onMouseDown={(e) => { e.preventDefault(); document.execCommand('indent'); }}>→|</button>
                       <button className="fmt-btn" title="Ausrücken" onMouseDown={(e) => { e.preventDefault(); document.execCommand('outdent'); }}>|←</button>
+                    </div>
+                    
+                    <div className="format-divider" />
+                    
+                    {/* Absatz-Abstände */}
+                    <div className="format-group spacing-group">
+                      <span className="spacing-label">Abstand:</span>
+                      <button className="fmt-btn fmt-spacing" title="Abstand vorher +" onMouseDown={(e) => {
+                        e.preventDefault();
+                        const selection = window.getSelection();
+                        if (!selection || selection.rangeCount === 0) return;
+                        let node = selection.anchorNode;
+                        while (node && node.parentNode) {
+                          if (node.style) {
+                            const current = parseInt(node.style.marginTop) || 0;
+                            node.style.marginTop = (current + 6) + 'pt';
+                            break;
+                          }
+                          node = node.parentNode;
+                        }
+                      }}>↑+</button>
+                      <button className="fmt-btn fmt-spacing" title="Abstand vorher -" onMouseDown={(e) => {
+                        e.preventDefault();
+                        const selection = window.getSelection();
+                        if (!selection || selection.rangeCount === 0) return;
+                        let node = selection.anchorNode;
+                        while (node && node.parentNode) {
+                          if (node.style) {
+                            const current = parseInt(node.style.marginTop) || 0;
+                            node.style.marginTop = Math.max(0, current - 6) + 'pt';
+                            break;
+                          }
+                          node = node.parentNode;
+                        }
+                      }}>↑-</button>
+                      <button className="fmt-btn fmt-spacing" title="Abstand nachher +" onMouseDown={(e) => {
+                        e.preventDefault();
+                        const selection = window.getSelection();
+                        if (!selection || selection.rangeCount === 0) return;
+                        let node = selection.anchorNode;
+                        while (node && node.parentNode) {
+                          if (node.style) {
+                            const current = parseInt(node.style.marginBottom) || 0;
+                            node.style.marginBottom = (current + 6) + 'pt';
+                            break;
+                          }
+                          node = node.parentNode;
+                        }
+                      }}>↓+</button>
+                      <button className="fmt-btn fmt-spacing" title="Abstand nachher -" onMouseDown={(e) => {
+                        e.preventDefault();
+                        const selection = window.getSelection();
+                        if (!selection || selection.rangeCount === 0) return;
+                        let node = selection.anchorNode;
+                        while (node && node.parentNode) {
+                          if (node.style) {
+                            const current = parseInt(node.style.marginBottom) || 0;
+                            node.style.marginBottom = Math.max(0, current - 6) + 'pt';
+                            break;
+                          }
+                          node = node.parentNode;
+                        }
+                      }}>↓-</button>
                     </div>
                     
                     <div className="format-divider" />
@@ -29305,7 +29429,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         onChange={(e) => updateFeld(ausgewaehltesFeld.id, { zusammenfassung: e.target.value })} 
                         className="bearbeiten-textarea zusammenfassung-input" 
                         placeholder="Kurze Beschreibung der Szene..." 
-                        rows={4}
+                        rows={6}
                       />
                     </div>
                     
