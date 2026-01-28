@@ -284,57 +284,17 @@ const SzeneEditor = React.memo(({ feldId, initialContent, onSave, onFocus, onFor
       editorRef.current.innerHTML = '';
     }
     
-    // Enter-Taste: Neuen Absatz erstellen (nicht Block teilen)
+    // Enter-Taste: Standard-Verhalten (Browser macht neuen Absatz)
+    // Wir überschreiben es NICHT mehr, damit es wie in Pages/Word funktioniert
     if (e.key === 'Enter' && !e.shiftKey) {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
-      
-      // Finde den aktuellen Format-Block
-      let node = selection.anchorNode;
-      while (node && node.nodeType === Node.TEXT_NODE) {
-        node = node.parentNode;
-      }
-      
-      let formatBlock = null;
-      let tempNode = node;
-      while (tempNode && tempNode !== editorRef.current) {
-        if (tempNode.classList && Array.from(tempNode.classList).some(c => c.startsWith('fmt-'))) {
-          formatBlock = tempNode;
-          break;
-        }
-        tempNode = tempNode.parentNode;
-      }
-      
-      if (formatBlock) {
-        e.preventDefault();
-        
-        // History speichern vor Änderung
-        saveToHistory();
-        
-        // Neuen leeren Absatz nach dem Block einfügen
-        const newPara = document.createElement('div');
-        newPara.innerHTML = '<br>';
-        
-        // Nach dem Format-Block einfügen
-        if (formatBlock.nextSibling) {
-          formatBlock.parentNode.insertBefore(newPara, formatBlock.nextSibling);
-        } else {
-          formatBlock.parentNode.appendChild(newPara);
-        }
-        
-        // Cursor in den neuen Absatz setzen
-        const range = document.createRange();
-        range.setStart(newPara, 0);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        
-        // Format-Anzeige aktualisieren
+      // History speichern vor Änderung
+      saveToHistory();
+      // Standard-Verhalten erlauben - Browser erstellt neuen <div>
+      // Nach kurzer Verzögerung Format-Anzeige aktualisieren
+      setTimeout(() => {
         onFormatChange(null);
-        
-        // Nach Änderung speichern
         saveToHistory();
-      }
+      }, 10);
     }
   };
   
@@ -8413,7 +8373,7 @@ const LeerstellenFinder = ({ figuren, szenenIdeen, themen, konflikte, onNavigate
 // =====================================================
 // SZENEN-IDEE WERKZEUG - Bearbeiten einer Szenen-Idee (Erweitertes Formular)
 // =====================================================
-const SzenenIdeeTool = ({ szene, figuren, onChange, onAddToSchreibflaeche }) => {
+const SzenenIdeeTool = ({ szene, figuren, onChange, onAddToSchreibflaeche, onDelete }) => {
   const [showDetails, setShowDetails] = useState(false);
   
   if (!szene) return null;
@@ -8427,7 +8387,7 @@ const SzenenIdeeTool = ({ szene, figuren, onChange, onAddToSchreibflaeche }) => 
     if (szene.titel) lines.push(`**${szene.titel}**`);
     if (szene.beschreibung) lines.push(szene.beschreibung);
     if (szene.figuren?.length > 0) {
-      const figurenNamen = szene.figuren.map(fId => {
+      const figurenNamen = szene?.figuren?.map(fId => {
         const f = figuren?.find(fig => fig.id === fId);
         return f?.name || fId;
       }).join(', ');
@@ -8628,6 +8588,15 @@ const SzenenIdeeTool = ({ szene, figuren, onChange, onAddToSchreibflaeche }) => 
           onClick={() => onAddToSchreibflaeche(generateText(), 'szenenidee')}
         >
           → Schreibfläche
+        </button>
+      )}
+      
+      {onDelete && (
+        <button 
+          className="loeschen-btn delete-szenenidee"
+          onClick={() => onDelete(szene.id)}
+        >
+          🗑️ Endgültig löschen
         </button>
       )}
     </div>
@@ -15168,6 +15137,7 @@ function DrameraWerkbank() {
   // === ONBOARDING ===
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDialogTipps, setShowDialogTipps] = useState(false);
+  const [sidebarSections, setSidebarSections] = useState({ dramaturgie: false, tracking: false, notizen: false });
   
   // Onboarding beim ersten Start prüfen
   useEffect(() => {
@@ -15819,7 +15789,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
         if (idx >= 0 && idx < data.felder.length) {
           setData(prev => ({
             ...prev,
-            felder: prev.felder.map((f, i) => i === idx ? {
+            felder: (prev.felder || []).map((f, i) => i === idx ? {
               ...f,
               titel: action.daten.titel || f.titel,
               zusammenfassung: action.daten.zusammenfassung || f.zusammenfassung,
@@ -15922,7 +15892,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
         // State aktualisieren
         setData(prev => ({
           ...prev,
-          felder: prev.felder.map((f, i) => i === idx ? {
+          felder: (prev.felder || []).map((f, i) => i === idx ? {
             ...f,
             inhalt: (f.inhalt || '') + '\n' + dialogHtml
           } : f)
@@ -15955,7 +15925,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
         const updates = action.daten.szenen_updates || [];
         setData(prev => ({
           ...prev,
-          felder: prev.felder.map((f, i) => {
+          felder: (prev.felder || []).map((f, i) => {
             const update = updates.find(u => u.index === i);
             return update ? { ...f, titel: update.titel } : f;
           })
@@ -15996,7 +15966,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
         
         setData(prev => ({
           ...prev,
-          felder: prev.felder.map(f => f.id === szeneId ? { ...f, ...updates } : f)
+          felder: (prev.felder || []).map(f => f.id === szeneId ? { ...f, ...updates } : f)
         }));
         
         return `✅ "${szene.titel}" aktualisiert:\n${changedFields.join('\n')}`;
@@ -16018,7 +15988,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
         
         setData(prev => ({
           ...prev,
-          felder: prev.felder.map(f => f.id === szeneId ? { ...f, titel: neuerTitel } : f)
+          felder: (prev.felder || []).map(f => f.id === szeneId ? { ...f, titel: neuerTitel } : f)
         }));
         
         return `✅ Titel geändert: "${neuerTitel}"`;
@@ -16040,7 +16010,7 @@ Ersetze den Dialog im JSON mit dem tatsächlichen Dialog den du geschrieben hast
         
         setData(prev => ({
           ...prev,
-          felder: prev.felder.map(f => f.id === szeneId ? { ...f, zusammenfassung: neueZusammenfassung } : f)
+          felder: (prev.felder || []).map(f => f.id === szeneId ? { ...f, zusammenfassung: neueZusammenfassung } : f)
         }));
         
         return `✅ Zusammenfassung aktualisiert`;
@@ -16169,13 +16139,13 @@ AKTUELLER PROJEKT-STAND:
 Titel: ${data.projektName}
 
 FIGUREN (${data.figuren.length}):
-${data.figuren.map((f, i) => `${i}. ${f.name}${f.ziel ? ` - Will: ${f.ziel}` : ''}${f.sprechweise ? ` - Spricht: ${f.sprechweise}` : ''}`).join('\n') || 'Keine Figuren'}
+${(data.figuren || []).map((f, i) => `${i}. ${f.name}${f.ziel ? ` - Will: ${f.ziel}` : ''}${f.sprechweise ? ` - Spricht: ${f.sprechweise}` : ''}`).join('\n') || 'Keine Figuren'}
 
 THEMEN (${data.themen.length}):
-${data.themen.map(t => t.name).join(', ') || 'Keine'}
+${(data.themen || []).map(t => t.name).join(', ') || 'Keine'}
 
 SZENEN IM ZEITSTRAHL (${data.felder.length}):
-${data.felder.map((f, i) => `${i}. "${f.titel}" - ${f.zusammenfassung || 'Keine Zusammenfassung'}`).join('\n') || 'Keine Szenen'}
+${(data.felder || []).map((f, i) => `${i}. "${f.titel}" - ${f.zusammenfassung || 'Keine Zusammenfassung'}`).join('\n') || 'Keine Szenen'}
 
 SZENEN-IDEEN IM MATERIAL (${data.szenenIdeen?.length || 0}):
 ${data.szenenIdeen?.map(s => `- "${s.titel}"`).join('\n') || 'Keine'}
@@ -16972,7 +16942,7 @@ WICHTIGE REGELN:
     const newHtml = editorNode.innerHTML;
     setData(prev => ({
       ...prev,
-      felder: prev.felder.map(f => f.id === feldId ? { ...f, inhalt: newHtml } : f)
+      felder: (prev.felder || []).map(f => f.id === feldId ? { ...f, inhalt: newHtml } : f)
     }));
     
     // Format-Anzeige aktualisieren (ohne dass der Editor neu gerendert wird)
@@ -16990,7 +16960,7 @@ WICHTIGE REGELN:
         if (feld && feld.inhalt !== newHtml) {
           return {
             ...prev,
-            felder: prev.felder.map(f => f.id === feldId ? { ...f, inhalt: newHtml } : f)
+            felder: (prev.felder || []).map(f => f.id === feldId ? { ...f, inhalt: newHtml } : f)
           };
         }
         return prev;
@@ -17007,12 +16977,12 @@ WICHTIGE REGELN:
                     type === 'figuren' ? { id: `fig${Date.now()}`, name: newItemValue } :
                     type === 'themen' ? { id: `th${Date.now()}`, name: newItemValue } :
                     { id: `sz${Date.now()}`, titel: newItemValue, notizen: '' };
-    setData(p => ({ ...p, [type]: [...p[type], newItem] }));
+    setData(p => ({ ...p, [type]: [...(p[type] || []), newItem] }));
     setNewItemType(null);
     setNewItemValue('');
   };
-  const deleteFromSammlung = (type, id) => setData(p => ({ ...p, [type]: p[type].filter(i => i.id !== id) }));
-  const updateFigur = (updatedFigur) => { setData(p => ({ ...p, figuren: p.figuren.map(f => f.id === updatedFigur.id ? updatedFigur : f) })); setSelectedFigur(updatedFigur); };
+  const deleteFromSammlung = (type, id) => setData(p => ({ ...p, [type]: (p[type] || []).filter(i => i.id !== id) }));
+  const updateFigur = (updatedFigur) => { setData(p => ({ ...p, figuren: (p.figuren || []).map(f => f.id === updatedFigur.id ? updatedFigur : f) })); setSelectedFigur(updatedFigur); };
 
   const extrahiereAlsFigur = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, figuren: [...(p.figuren || []), { id: `fig${Date.now()}`, name: s }] })); };
   const extrahiereAlsThema = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, themen: [...(p.themen || []), { id: `th${Date.now()}`, name: s }] })); };
@@ -17344,11 +17314,11 @@ WICHTIGE REGELN:
         }
         if (feld.zusammenfassung) lines.push(p(`<strong>Zusammenfassung:</strong> ${feld.zusammenfassung}`));
         if (feld.figuren && feld.figuren.length > 0) {
-          const figurenNamen = feld.figuren.map(id => data.figuren?.find(f => f.id === id)?.name || id).join(', ');
+          const figurenNamen = (feld?.figuren || []).map(id => data.figuren?.find(f => f.id === id)?.name || id).join(', ');
           lines.push(p(`<strong>Figuren:</strong> ${figurenNamen}`));
         }
         if (feld.themen && feld.themen.length > 0) {
-          const themenNamen = feld.themen.map(id => data.themen?.find(t => t.id === id)?.name || id).join(', ');
+          const themenNamen = (feld?.themen || []).map(id => data.themen?.find(t => t.id === id)?.name || id).join(', ');
           lines.push(p(`<strong>Themen:</strong> ${themenNamen}`));
         }
         if (feld.konflikt) lines.push(p(`<strong>Konflikt:</strong> ${feld.konflikt}`));
@@ -19078,10 +19048,38 @@ STIL:
   const handleDragOver = (e, i) => { e.preventDefault(); };
   const handleDrop = (e, targetIndex) => { e.preventDefault(); if (draggedIndex === null || draggedIndex === targetIndex) return; const f = [...(data.felder || [])]; const [d] = f.splice(draggedIndex, 1); f.splice(targetIndex, 0, d); f.forEach((x, i) => x.position = i); setData(p => ({ ...p, felder: f })); setDraggedIndex(null); };
 
-  const updateFeld = (feldId, updates) => { setData(p => ({ ...p, felder: p.felder.map(f => f.id === feldId ? { ...f, ...updates } : f) })); if (ausgewaehltesFeld?.id === feldId) setAusgewaehltesFeld(p => ({ ...p, ...updates })); };
+  const updateFeld = (feldId, updates) => { setData(p => ({ ...p, felder: (p.felder || []).map(f => f.id === feldId ? { ...f, ...updates } : f) })); if (ausgewaehltesFeld?.id === feldId) setAusgewaehltesFeld(p => ({ ...p, ...updates })); };
   const addFeld = (titel) => { const n = { id: `f${Date.now()}`, titel, position: (data.felder || []).length, figuren: [], themen: [], notizen: '', zusammenfassung: '', ziel: '', widerstand: '', wendepunkt: '', figuren_ziele: [], gespraechsart: '', status: 'idee', inhalt: '' }; setData(p => ({ ...p, felder: [...(p.felder || []), n] })); };
-  const deleteFeld = (id) => { setData(p => ({ ...p, felder: p.felder.filter(f => f.id !== id).map((f, i) => ({ ...f, position: i })) })); setAusgewaehltesFeld(null); };
-  const szeneZuZeitstrahl = (s) => { addFeld(s.titel); setData(p => ({ ...p, szenenIdeen: p.szenenIdeen.filter(x => x.id !== s.id) })); };
+  
+  // Szene aus Zeitstrahl entfernen und zurück zu Szenenideen verschieben
+  const feldZurueckZuIdeen = (id) => { 
+    const feld = data.felder?.find(f => f.id === id);
+    if (!feld) return;
+    // Als Szenenidee hinzufügen (mit vorhandenen Daten)
+    const neueIdee = {
+      id: `sz${Date.now()}`,
+      titel: feld.titel,
+      notizen: feld.notizen || '',
+      beschreibung: feld.zusammenfassung || '',
+      figuren: feld.figuren || [],
+      themen: feld.themen || []
+    };
+    setData(p => ({ 
+      ...p, 
+      felder: (p.felder || []).filter(f => f.id !== id).map((f, i) => ({ ...f, position: i })),
+      szenenIdeen: [...(p.szenenIdeen || []), neueIdee]
+    })); 
+    setAusgewaehltesFeld(null); 
+  };
+  
+  // Szenenidee endgültig löschen
+  const deleteSzeneIdee = (id) => {
+    if (!window.confirm('Szenenidee endgültig löschen?')) return;
+    setData(p => ({ ...p, szenenIdeen: (p.szenenIdeen || []).filter(s => s.id !== id) }));
+    setSelectedSzeneIdee(null);
+  };
+  
+  const szeneZuZeitstrahl = (s) => { addFeld(s.titel); setData(p => ({ ...p, szenenIdeen: (p.szenenIdeen || []).filter(x => x.id !== s.id) })); };
   const addFigurToFeld = (id) => { if (!ausgewaehltesFeld || ausgewaehltesFeld.figuren.includes(id)) return; updateFeld(ausgewaehltesFeld.id, { figuren: [...ausgewaehltesFeld.figuren, id] }); };
   const addThemaToFeld = (id) => { if (!ausgewaehltesFeld || ausgewaehltesFeld.themen.includes(id)) return; updateFeld(ausgewaehltesFeld.id, { themen: [...ausgewaehltesFeld.themen, id] }); };
 
@@ -19400,7 +19398,7 @@ STIL:
   const addFigurToSzene = (szeneId, figurId) => {
     setData(p => ({
       ...p,
-      felder: p.felder.map(f => 
+      felder: (p.felder || []).map(f => 
         f.id === szeneId 
           ? { ...f, figuren: [...(f.figuren || []), figurId] }
           : f
@@ -19411,7 +19409,7 @@ STIL:
   const addThemaToSzene = (szeneId, themaId) => {
     setData(p => ({
       ...p,
-      felder: p.felder.map(f => 
+      felder: (p.felder || []).map(f => 
         f.id === szeneId 
           ? { ...f, themen: [...(f.themen || []), themaId] }
           : f
@@ -19629,11 +19627,12 @@ STIL:
           onChange={(updated) => {
             setData(p => ({
               ...p,
-              szenenIdeen: p.szenenIdeen.map(s => s.id === updated.id ? updated : s)
+              szenenIdeen: (p.szenenIdeen || []).map(s => s.id === updated.id ? updated : s)
             }));
             setSelectedSzeneIdee(updated);
           }}
           onAddToSchreibflaeche={addToSchreibflaeche}
+          onDelete={deleteSzeneIdee}
         />;
       case 'thema_bearbeiten':
         if (!selectedThema) return <div className="tool-empty">Wähle ein Thema</div>;
@@ -19642,7 +19641,7 @@ STIL:
           onChange={(updated) => {
             setData(p => ({
               ...p,
-              themen: p.themen.map(t => t.id === updated.id ? updated : t)
+              themen: (p.themen || []).map(t => t.id === updated.id ? updated : t)
             }));
             setSelectedThema(updated);
           }}
@@ -25226,7 +25225,7 @@ STIL:
           font-size: 12pt;
           margin-top: 0;
           margin-bottom: 0;
-          margin-left: 2.5cm;
+          margin-left: 6cm;
           line-height: 1.5;
           color: #1a1a1a;
           text-decoration: none;
@@ -25239,7 +25238,7 @@ STIL:
           font-size: 12pt;
           margin-top: 12pt;
           margin-bottom: 0;
-          margin-left: 0;
+          margin-left: 2cm;
           line-height: 1.5;
           color: #1a1a1a;
           font-weight: normal;
@@ -25259,18 +25258,6 @@ STIL:
           line-height: 1.3;
           color: #1e3a8a;
           text-decoration: none;
-        }
-        
-        /* Neue Formatvorlagen */
-        .szene-editor .fmt-figurenname {
-          font-family: 'Courier New', Courier, monospace;
-          font-size: 12pt;
-          font-weight: bold;
-          font-variant: small-caps;
-          text-align: center;
-          margin-top: 18pt;
-          margin-bottom: 6pt;
-          color: #1a1a1a;
         }
         
         .szene-editor .fmt-nebentext {
@@ -25298,11 +25285,27 @@ STIL:
         /* Bearbeiten Sidebar */
         .bearbeiten-sidebar { background: #fff; border-left: 1px solid #e0dbd2; padding: 1rem; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; min-width: 200px; max-width: 450px; }
         .bearbeiten-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        
+        /* Aufklappbare Sektionen */
+        .feld-section-collapsible { margin-top: 0.75rem; border: 1px solid #e5e1d8; border-radius: 6px; overflow: hidden; }
+        .collapsible-header { 
+          display: flex; justify-content: space-between; align-items: center; 
+          width: 100%; padding: 0.6rem 0.75rem; background: #f9f7f4; border: none; 
+          cursor: pointer; font-size: 0.85rem; color: #5c5347; text-align: left;
+        }
+        .collapsible-header:hover { background: #f0ede6; }
+        .collapsible-header span:first-child { font-weight: 500; }
+        .collapsible-hint { font-size: 0.75rem; color: #9b8e7d; }
+        .collapsible-content { padding: 0.75rem; background: #fff; border-top: 1px solid #e5e1d8; }
         .bearbeiten-title { font-weight: 600; color: #6b4423; }
         .bearbeiten-input { width: 100%; border: 1px solid #e0dbd2; border-radius: 4px; padding: 0.5rem; font-size: 0.875rem; margin-bottom: 0.5rem; box-sizing: border-box; }
         .bearbeiten-textarea { width: 100%; border: 1px solid #e0dbd2; border-radius: 4px; padding: 0.5rem; font-size: 0.8rem; resize: vertical; box-sizing: border-box; }
         .bearbeiten-select { width: 100%; border: 1px solid #e0dbd2; border-radius: 4px; padding: 0.4rem; font-size: 0.8rem; box-sizing: border-box; }
         .loeschen-btn { width: 100%; padding: 0.5rem; border: 1px solid #fecaca; background: #fff; color: #dc2626; border-radius: 4px; cursor: pointer; margin-top: 1rem; }
+        .loeschen-btn.zurueck-btn { border-color: #fed7aa; color: #c2410c; background: #fff7ed; }
+        .loeschen-btn.zurueck-btn:hover { background: #ffedd5; }
+        .loeschen-btn.delete-szenenidee { margin-top: 1.5rem; }
+        .loeschen-btn.delete-szenenidee:hover { background: #fef2f2; }
         
         /* Feld Sections */
         .feld-section { margin-bottom: 0.75rem; }
@@ -29271,7 +29274,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                               onSave={(id, html) => {
                                 setData(prev => ({
                                   ...prev,
-                                  felder: prev.felder.map(feld => feld.id === id ? { ...feld, inhalt: html } : feld)
+                                  felder: (prev.felder || []).map(feld => feld.id === id ? { ...feld, inhalt: html } : feld)
                                 }));
                               }}
                               onFocus={() => setAusgewaehltesFeld(f)}
@@ -29309,6 +29312,8 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                       <button className="close-btn" onClick={() => setAusgewaehltesFeld(null)}>×</button>
                     </div>
                     
+                    {/* === IMMER SICHTBAR === */}
+                    
                     {/* Titel */}
                     <input type="text" value={ausgewaehltesFeld.titel} onChange={(e) => updateFeld(ausgewaehltesFeld.id, { titel: e.target.value })} className="bearbeiten-input" placeholder="Titel" />
                     
@@ -29324,361 +29329,303 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                       />
                     </div>
                     
-                    {/* Dramaturgische Funktion: Ziel, Widerstand, Veränderung */}
-                    <div className="feld-section szene-dramaturgie">
-                      <label className="feld-label">🎯 Ziel</label>
-                      {leitfragenAktiv && <span className="leitfrage-hint">Was will die Hauptfigur hier erreichen?</span>}
-                      <textarea 
-                        value={ausgewaehltesFeld.ziel || ''} 
-                        onChange={(e) => updateFeld(ausgewaehltesFeld.id, { ziel: e.target.value })} 
-                        className="bearbeiten-textarea" 
-                      placeholder={leitfragenAktiv ? "z.B. Romeo will Julia wiedersehen" : "Szenenziel"} 
-                      rows={2}
-                    />
-                  </div>
-                  
-                  <div className="feld-section szene-dramaturgie">
-                    <label className="feld-label">⚡ Widerstand</label>
-                    {leitfragenAktiv && <span className="leitfrage-hint">Was steht dem entgegen?</span>}
-                    <textarea 
-                      value={ausgewaehltesFeld.widerstand || ''} 
-                      onChange={(e) => updateFeld(ausgewaehltesFeld.id, { widerstand: e.target.value })} 
-                      className="bearbeiten-textarea" 
-                      placeholder={leitfragenAktiv ? "z.B. Die Familienfehde, Tybalts Wachsamkeit" : "Hindernisse"} 
-                      rows={2}
-                    />
-                  </div>
-                  
-                  <div className="feld-section szene-dramaturgie">
-                    <label className="feld-label">
-                      🔄 Wendepunkt
+                    {/* Status */}
+                    <div className="feld-section">
+                      <label className="feld-label">Status</label>
+                      <select value={ausgewaehltesFeld.status || 'idee'} onChange={(e) => updateFeld(ausgewaehltesFeld.id, { status: e.target.value })} className="bearbeiten-select">
+                        {statusOptionen.map(s => <option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+                      </select>
+                    </div>
+                    
+                    {/* Figuren */}
+                    <div className="feld-section">
+                      <label className="feld-label">Figuren</label>
+                      <div className="chips-container">
+                        {ausgewaehltesFeld.figuren?.map(fid => {
+                          const fig = data.figuren?.find(f => f.id === fid);
+                          return fig ? (
+                            <span key={fid} className="chip chip-figur">
+                              {fig.name}
+                              <button className="chip-remove" onClick={() => updateFeld(ausgewaehltesFeld.id, { figuren: ausgewaehltesFeld?.figuren?.filter(id => id !== fid) })}>×</button>
+                            </span>
+                          ) : null;
+                        })}
+                        {(!ausgewaehltesFeld.figuren || ausgewaehltesFeld?.figuren?.length === 0) && <span className="chips-hint">Klicke auf Figuren in der Material-Sidebar</span>}
+                      </div>
+                    </div>
+                    
+                    {/* Themen */}
+                    <div className="feld-section">
+                      <label className="feld-label">Themen</label>
+                      <div className="chips-container">
+                        {ausgewaehltesFeld.themen?.map(tid => {
+                          const thema = data.themen?.find(t => t.id === tid);
+                          return thema ? (
+                            <span key={tid} className="chip chip-thema">
+                              {thema.name}
+                              <button className="chip-remove" onClick={() => updateFeld(ausgewaehltesFeld.id, { themen: ausgewaehltesFeld?.themen?.filter(id => id !== tid) })}>×</button>
+                            </span>
+                          ) : null;
+                        })}
+                        {(!ausgewaehltesFeld.themen || ausgewaehltesFeld.themen.length === 0) && <span className="chips-hint">Klicke auf Themen in der Material-Sidebar</span>}
+                      </div>
+                    </div>
+                    
+                    {/* === AUFKLAPPBAR: DRAMATURGIE === */}
+                    <div className="feld-section-collapsible">
                       <button 
-                        className="info-icon-btn" 
-                        onClick={() => setShowDialogTipps(!showDialogTipps)}
-                        title="Dialog-Prinzipien anzeigen"
+                        className="collapsible-header"
+                        onClick={() => setSidebarSections(s => ({ ...s, dramaturgie: !s.dramaturgie }))}
                       >
-                        ℹ️
+                        <span>{sidebarSections.dramaturgie ? '▼' : '▶'} 🎭 Dramaturgie</span>
+                        <span className="collapsible-hint">Ziel, Widerstand, Wendepunkt...</span>
                       </button>
-                    </label>
-                    {showDialogTipps && (
-                      <div className="dialog-tipps-popup">
-                        <div className="dialog-tipps-header">
-                          <strong>💬 Die 5 Dialog-Prinzipien</strong>
-                          <button className="close-btn-small" onClick={() => setShowDialogTipps(false)}>×</button>
-                        </div>
-                        <div className="dialog-tipps-list">
-                          {DIALOG_PRINZIPIEN.map(p => (
-                            <div key={p.nummer} className="dialog-tipp">
-                              <span className="tipp-nummer">{p.nummer}.</span>
-                              <div>
-                                <strong>{p.titel}</strong>
-                                <p>{p.erklaerung}</p>
+                      
+                      {sidebarSections.dramaturgie && (
+                        <div className="collapsible-content">
+                          {/* Ziel */}
+                          <div className="feld-section szene-dramaturgie">
+                            <label className="feld-label">🎯 Ziel</label>
+                            {leitfragenAktiv && <span className="leitfrage-hint">Was will die Hauptfigur hier erreichen?</span>}
+                            <textarea 
+                              value={ausgewaehltesFeld.ziel || ''} 
+                              onChange={(e) => updateFeld(ausgewaehltesFeld.id, { ziel: e.target.value })} 
+                              className="bearbeiten-textarea" 
+                              placeholder={leitfragenAktiv ? "z.B. Romeo will Julia wiedersehen" : "Szenenziel"} 
+                              rows={2}
+                            />
+                          </div>
+                          
+                          {/* Widerstand */}
+                          <div className="feld-section szene-dramaturgie">
+                            <label className="feld-label">⚡ Widerstand</label>
+                            {leitfragenAktiv && <span className="leitfrage-hint">Was steht dem entgegen?</span>}
+                            <textarea 
+                              value={ausgewaehltesFeld.widerstand || ''} 
+                              onChange={(e) => updateFeld(ausgewaehltesFeld.id, { widerstand: e.target.value })} 
+                              className="bearbeiten-textarea" 
+                              placeholder={leitfragenAktiv ? "z.B. Die Familienfehde, Tybalts Wachsamkeit" : "Hindernisse"} 
+                              rows={2}
+                            />
+                          </div>
+                          
+                          {/* Wendepunkt */}
+                          <div className="feld-section szene-dramaturgie">
+                            <label className="feld-label">
+                              🔄 Wendepunkt
+                              <button 
+                                className="info-icon-btn" 
+                                onClick={() => setShowDialogTipps(!showDialogTipps)}
+                                title="Dialog-Prinzipien anzeigen"
+                              >
+                                ℹ️
+                              </button>
+                            </label>
+                            {showDialogTipps && (
+                              <div className="dialog-tipps-popup">
+                                <div className="dialog-tipps-header">
+                                  <strong>💬 Die 5 Dialog-Prinzipien</strong>
+                                  <button className="close-btn-small" onClick={() => setShowDialogTipps(false)}>×</button>
+                                </div>
+                                <div className="dialog-tipps-list">
+                                  {DIALOG_PRINZIPIEN.map(p => (
+                                    <div key={p.nummer} className="dialog-tipp">
+                                      <span className="tipp-nummer">{p.nummer}.</span>
+                                      <div>
+                                        <strong>{p.titel}</strong>
+                                        <p>{p.erklaerung}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {leitfragenAktiv && <span className="leitfrage-hint">Der Moment, wo sich alles dreht</span>}
+                            <textarea 
+                              value={ausgewaehltesFeld.wendepunkt || ''} 
+                              onChange={(e) => updateFeld(ausgewaehltesFeld.id, { wendepunkt: e.target.value })} 
+                              className="bearbeiten-textarea" 
+                              placeholder={leitfragenAktiv ? "z.B. Als Martin 'aus Budgetgründen' sagt und Anna merkt, dass er lügt" : "Wendepunkt"} 
+                              rows={2}
+                            />
+                          </div>
+                          
+                          {/* Figuren-Ziele */}
+                          {ausgewaehltesFeld.figuren?.length > 0 && (
+                            <div className="feld-section szene-dramaturgie figuren-ziele-section">
+                              <label className="feld-label">🎭 Was will wer?</label>
+                              <div className="gespraechsart-select">
+                                <select 
+                                  value={ausgewaehltesFeld.gespraechsart || ''}
+                                  onChange={(e) => updateFeld(ausgewaehltesFeld.id, { gespraechsart: e.target.value })}
+                                  className="gespraechsart-dropdown"
+                                >
+                                  <option value="">💡 Gesprächsart (optional)</option>
+                                  {GESPRAECHSARTEN.map(g => (
+                                    <option key={g.name} value={g.name}>{g.name} – {g.kurz}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="figuren-ziele-list">
+                                {ausgewaehltesFeld?.figuren?.map(figurId => {
+                                  const figur = data.figuren?.find(f => f.id === figurId);
+                                  if (!figur) return null;
+                                  const figurZiel = ausgewaehltesFeld.figuren_ziele?.find(fz => fz.figur_id === figurId);
+                                  return (
+                                    <div key={figurId} className="figur-ziel-item">
+                                      <span className="figur-ziel-name">{figur.name}:</span>
+                                      <input 
+                                        type="text"
+                                        value={figurZiel?.will || ''}
+                                        onChange={(e) => {
+                                          const neueZiele = [...(ausgewaehltesFeld.figuren_ziele || [])];
+                                          const existingIndex = neueZiele.findIndex(fz => fz.figur_id === figurId);
+                                          if (existingIndex >= 0) {
+                                            neueZiele[existingIndex] = { figur_id: figurId, will: e.target.value };
+                                          } else {
+                                            neueZiele.push({ figur_id: figurId, will: e.target.value });
+                                          }
+                                          updateFeld(ausgewaehltesFeld.id, { figuren_ziele: neueZiele });
+                                        }}
+                                        placeholder="Ziel in dieser Szene"
+                                        className="figur-ziel-input"
+                                      />
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
-                          ))}
+                          )}
                         </div>
+                      )}
+                    </div>
+                    
+                    {/* === AUFKLAPPBAR: NOTIZEN === */}
+                    <div className="feld-section-collapsible">
+                      <button 
+                        className="collapsible-header"
+                        onClick={() => setSidebarSections(s => ({ ...s, notizen: !s.notizen }))}
+                      >
+                        <span>{sidebarSections.notizen ? '▼' : '▶'} 📝 Notizen</span>
+                      </button>
+                      
+                      {sidebarSections.notizen && (
+                        <div className="collapsible-content">
+                          <textarea 
+                            value={ausgewaehltesFeld.notizen || ''} 
+                            onChange={(e) => updateFeld(ausgewaehltesFeld.id, { notizen: e.target.value })} 
+                            className="bearbeiten-textarea" 
+                            placeholder="Interne Notizen..." 
+                            rows={4} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* === AUFKLAPPBAR: FIGUREN-TRACKING === */}
+                    {ausgewaehltesFeld.figuren?.length > 0 && (
+                      <div className="feld-section-collapsible">
+                        <button 
+                          className="collapsible-header"
+                          onClick={() => setSidebarSections(s => ({ ...s, tracking: !s.tracking }))}
+                        >
+                          <span>{sidebarSections.tracking ? '▼' : '▶'} 👥 Figuren-Tracking ({ausgewaehltesFeld?.figuren?.length})</span>
+                        </button>
+                        
+                        {sidebarSections.tracking && (
+                          <div className="collapsible-content">
+                            {ausgewaehltesFeld?.figuren?.map(figurId => {
+                              const figur = data.figuren?.find(f => f.id === figurId);
+                              if (!figur) return null;
+                              const tracking = data.figuren_tracking?.[figurId]?.[ausgewaehltesFeld.id] || {};
+                              const farbe = getFigurFarbe(figurId, data.figuren);
+                              
+                              return (
+                                <div 
+                                  key={figurId} 
+                                  className="figur-tracking-card"
+                                  style={{ borderLeftColor: farbe.border, background: `linear-gradient(135deg, ${farbe.bg}50 0%, white 100%)` }}
+                                >
+                                  <div className="figur-tracking-header">
+                                    <span className="figur-name" style={{ color: farbe.text }}>{figur.name}</span>
+                                  </div>
+                                  <div className="tracking-fields-grid">
+                                    <div className="tracking-field-mini">
+                                      <label>Zustand</label>
+                                      <input type="text" value={tracking.zustand || ''} onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'zustand', e.target.value)} placeholder="Wie geht es ihr?" />
+                                    </div>
+                                    <div className="tracking-field-mini">
+                                      <label>Will hier</label>
+                                      <input type="text" value={tracking.will_hier || ''} onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'will_hier', e.target.value)} placeholder="Szenenziel" />
+                                    </div>
+                                    <div className="tracking-field-mini">
+                                      <label>Hindernis</label>
+                                      <input type="text" value={tracking.hindernis || ''} onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'hindernis', e.target.value)} placeholder="Was steht im Weg?" />
+                                    </div>
+                                    <div className="tracking-field-mini">
+                                      <label>Veränderung</label>
+                                      <input type="text" value={tracking.veraenderung || ''} onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'veraenderung', e.target.value)} placeholder="Wie verlässt sie die Szene?" />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
-                    {leitfragenAktiv && <span className="leitfrage-hint">Der Moment, wo sich alles dreht – wo Erwartung auf Realität trifft</span>}
-                    <textarea 
-                      value={ausgewaehltesFeld.wendepunkt || ''} 
-                      onChange={(e) => updateFeld(ausgewaehltesFeld.id, { wendepunkt: e.target.value })} 
-                      className="bearbeiten-textarea" 
-                      placeholder={leitfragenAktiv ? "z.B. Als Martin 'aus Budgetgründen' sagt und Anna merkt, dass er lügt" : "Wendepunkt"} 
-                      rows={2}
-                    />
-                  </div>
-                  
-                  {/* Figuren-Ziele: Was will jede Figur in dieser Szene? */}
-                  {ausgewaehltesFeld.figuren?.length > 0 && (
-                    <div className="feld-section szene-dramaturgie figuren-ziele-section">
-                      <label className="feld-label">🎭 Was will wer in dieser Szene?</label>
-                      {leitfragenAktiv && <span className="leitfrage-hint">Gegensätzliche Ziele erzeugen Konflikt</span>}
-                      
-                      {/* Gesprächsart-Inspiration */}
-                      <div className="gespraechsart-select">
-                        <select 
-                          value={ausgewaehltesFeld.gespraechsart || ''}
-                          onChange={(e) => updateFeld(ausgewaehltesFeld.id, { gespraechsart: e.target.value })}
-                          className="gespraechsart-dropdown"
-                        >
-                          <option value="">💡 Gesprächsart wählen (optional)</option>
-                          {GESPRAECHSARTEN.map(g => (
-                            <option key={g.name} value={g.name}>{g.name} – {g.kurz}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div className="figuren-ziele-list">
-                        {ausgewaehltesFeld.figuren.map(figurId => {
-                          const figur = data.figuren.find(f => f.id === figurId);
+                    
+                    {/* Tracking-Modus Eingabe (wenn aktiviert) */}
+                    {trackingModus && trackingTargets.length > 0 && (
+                      <div className="feld-section tracking-sidebar-section">
+                        <label className="feld-label">👁️ Aktives Tracking</label>
+                        {trackingModus === 'figur' && trackingTargets.map(fid => {
+                          const figur = data.figuren?.find(f => f.id === fid);
+                          const inSzene = ausgewaehltesFeld.figuren?.includes(fid);
+                          const tData = data.figuren_tracking?.[fid]?.[ausgewaehltesFeld.id] || {};
+                          const farbe = getFigurFarbe(fid, data.figuren);
                           if (!figur) return null;
-                          const figurZiel = ausgewaehltesFeld.figuren_ziele?.find(fz => fz.figur_id === figurId);
                           return (
-                            <div key={figurId} className="figur-ziel-item">
-                              <span className="figur-ziel-name">{figur.name} will:</span>
-                              <input 
-                                type="text"
-                                value={figurZiel?.will || ''}
-                                onChange={(e) => {
-                                  const neueZiele = [...(ausgewaehltesFeld.figuren_ziele || [])];
-                                  const existingIndex = neueZiele.findIndex(fz => fz.figur_id === figurId);
-                                  if (existingIndex >= 0) {
-                                    neueZiele[existingIndex] = { figur_id: figurId, will: e.target.value };
-                                  } else {
-                                    neueZiele.push({ figur_id: figurId, will: e.target.value });
-                                  }
-                                  updateFeld(ausgewaehltesFeld.id, { figuren_ziele: neueZiele });
-                                }}
-                                placeholder={leitfragenAktiv ? `Was will ${figur.name} hier erreichen?` : "Ziel"}
-                                className="figur-ziel-input"
-                              />
+                            <div key={fid} className={`tracking-sidebar-card ${inSzene ? 'vorhanden' : 'fehlt'}`} style={inSzene ? { background: farbe.bg, borderColor: farbe.border, borderLeftWidth: '4px' } : {}}>
+                              <div className="tracking-sidebar-header" style={inSzene ? { color: farbe.text } : {}}>
+                                👤 {figur.name}
+                                {!inSzene && <button className="tracking-add-btn" onClick={() => addFigurToSzene(ausgewaehltesFeld.id, fid)}>+ Hinzufügen</button>}
+                              </div>
+                              {inSzene && (
+                                <div className="tracking-sidebar-fields">
+                                  <input type="text" placeholder="Zustand" value={tData.zustand || ''} onChange={(e) => updateFigurenTracking(fid, ausgewaehltesFeld.id, 'zustand', e.target.value)} />
+                                  <input type="text" placeholder="Will hier" value={tData.will_hier || ''} onChange={(e) => updateFigurenTracking(fid, ausgewaehltesFeld.id, 'will_hier', e.target.value)} />
+                                  <input type="text" placeholder="Veränderung" value={tData.veraenderung || ''} onChange={(e) => updateFigurenTracking(fid, ausgewaehltesFeld.id, 'veraenderung', e.target.value)} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {trackingModus === 'thema' && trackingTargets.map(tid => {
+                          const thema = data.themen?.find(t => t.id === tid);
+                          const inSzene = ausgewaehltesFeld.themen?.includes(tid);
+                          const tData = data.themen_tracking?.[tid]?.[ausgewaehltesFeld.id] || {};
+                          const farbe = getThemaFarbe(tid, data.themen);
+                          if (!thema) return null;
+                          return (
+                            <div key={tid} className={`tracking-sidebar-card thema ${inSzene ? 'vorhanden' : 'fehlt'}`} style={inSzene ? { background: farbe.bg, borderColor: farbe.border, borderLeftWidth: '4px' } : {}}>
+                              <div className="tracking-sidebar-header" style={inSzene ? { color: farbe.text } : {}}>
+                                💬 {thema.name}
+                                {!inSzene && <button className="tracking-add-btn" onClick={() => addThemaToSzene(ausgewaehltesFeld.id, tid)}>+ Hinzufügen</button>}
+                              </div>
+                              {inSzene && (
+                                <div className="tracking-sidebar-fields">
+                                  <input type="text" placeholder="Wie zeigt es sich?" value={tData.wie_zeigt_es_sich || ''} onChange={(e) => updateThemenTracking(tid, ausgewaehltesFeld.id, 'wie_zeigt_es_sich', e.target.value)} />
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Status */}
-                  <div className="feld-section">
-                    <label className="feld-label">Status</label>
-                    <select value={ausgewaehltesFeld.status || 'idee'} onChange={(e) => updateFeld(ausgewaehltesFeld.id, { status: e.target.value })} className="bearbeiten-select">
-                      {statusOptionen.map(s => <option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
-                    </select>
+                    )}
+                    
+                    <button onClick={() => feldZurueckZuIdeen(ausgewaehltesFeld.id)} className="loeschen-btn zurueck-btn">↩️ Zurück zu Ideen</button>
                   </div>
-                  
-                  {/* Figuren */}
-                  <div className="feld-section">
-                    <label className="feld-label">Figuren</label>
-                    <div className="chips-container">
-                      {ausgewaehltesFeld.figuren?.map(fid => {
-                        const fig = data.figuren.find(f => f.id === fid);
-                        return fig ? (
-                          <span key={fid} className="chip chip-figur">
-                            {fig.name}
-                            <button className="chip-remove" onClick={() => updateFeld(ausgewaehltesFeld.id, { figuren: ausgewaehltesFeld.figuren.filter(id => id !== fid) })}>×</button>
-                          </span>
-                        ) : null;
-                      })}
-                      {(!ausgewaehltesFeld.figuren || ausgewaehltesFeld.figuren.length === 0) && <span className="chips-hint">Klicke auf Figuren in der Material-Sidebar</span>}
-                    </div>
-                  </div>
-                  
-                  {/* Themen */}
-                  <div className="feld-section">
-                    <label className="feld-label">Themen</label>
-                    <div className="chips-container">
-                      {ausgewaehltesFeld.themen?.map(tid => {
-                        const thema = data.themen.find(t => t.id === tid);
-                        return thema ? (
-                          <span key={tid} className="chip chip-thema">
-                            {thema.name}
-                            <button className="chip-remove" onClick={() => updateFeld(ausgewaehltesFeld.id, { themen: ausgewaehltesFeld.themen.filter(id => id !== tid) })}>×</button>
-                          </span>
-                        ) : null;
-                      })}
-                      {(!ausgewaehltesFeld.themen || ausgewaehltesFeld.themen.length === 0) && <span className="chips-hint">Klicke auf Themen in der Material-Sidebar</span>}
-                    </div>
-                  </div>
-                  
-                  {/* Notizen */}
-                  <div className="feld-section">
-                    <label className="feld-label">Notizen</label>
-                    <textarea value={ausgewaehltesFeld.notizen || ''} onChange={(e) => updateFeld(ausgewaehltesFeld.id, { notizen: e.target.value })} className="bearbeiten-textarea" placeholder="Interne Notizen..." rows={3} />
-                  </div>
-                  
-                  {/* FIGUREN IN DIESER SZENE - immer sichtbar */}
-                  {ausgewaehltesFeld.figuren?.length > 0 && (
-                    <div className="feld-section szene-figuren-tracking">
-                      <label className="feld-label">👥 Figuren in dieser Szene ({ausgewaehltesFeld.figuren.length})</label>
-                      {ausgewaehltesFeld.figuren.map(figurId => {
-                        const figur = data.figuren.find(f => f.id === figurId);
-                        if (!figur) return null;
-                        
-                        const tracking = data.figuren_tracking?.[figurId]?.[ausgewaehltesFeld.id] || {};
-                        const farbe = getFigurFarbe(figurId, data.figuren);
-                        
-                        return (
-                          <div 
-                            key={figurId} 
-                            className="figur-tracking-card"
-                            style={{ 
-                              borderLeftColor: farbe.border,
-                              background: `linear-gradient(135deg, ${farbe.bg}50 0%, white 100%)`
-                            }}
-                          >
-                            <div className="figur-tracking-header">
-                              <span className="figur-name" style={{ color: farbe.text }}>
-                                <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: farbe.border, marginRight: '6px' }}></span>
-                                {figur.name}
-                              </span>
-                              {figur.begehren && (
-                                <span className="figur-begehren-hint" title={`Übergeordnetes Begehren: ${figur.begehren}`}>
-                                  🎯 {figur.begehren.substring(0, 20)}...
-                                </span>
-                              )}
-                            </div>
-                            
-                            <div className="tracking-fields-grid">
-                              <div className="tracking-field-mini">
-                                <label>Zustand</label>
-                                <input 
-                                  type="text"
-                                  value={tracking.zustand || ''}
-                                  onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'zustand', e.target.value)}
-                                  placeholder="Wie geht es ihr?"
-                                />
-                              </div>
-                              <div className="tracking-field-mini">
-                                <label>Will hier</label>
-                                <input 
-                                  type="text"
-                                  value={tracking.will_hier || ''}
-                                  onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'will_hier', e.target.value)}
-                                  placeholder="Szenenziel"
-                                />
-                              </div>
-                              <div className="tracking-field-mini">
-                                <label>Hindernis</label>
-                                <input 
-                                  type="text"
-                                  value={tracking.hindernis || ''}
-                                  onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'hindernis', e.target.value)}
-                                  placeholder="Was steht im Weg?"
-                                />
-                              </div>
-                              <div className="tracking-field-mini">
-                                <label>Veränderung</label>
-                                <input 
-                                  type="text"
-                                  value={tracking.veraenderung || ''}
-                                  onChange={(e) => updateFigurenTracking(figurId, ausgewaehltesFeld.id, 'veraenderung', e.target.value)}
-                                  placeholder="Wie verlässt sie die Szene?"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  
-                  {/* TRACKING-EINGABE in Sidebar (für zusätzliche getrackte Figuren) */}
-                  {trackingModus && trackingTargets.length > 0 && (
-                    <div className="feld-section tracking-sidebar-section">
-                      <label className="feld-label">👁️ Tracking</label>
-                      
-                      {trackingModus === 'figur' && trackingTargets.map(fid => {
-                        const figur = data.figuren.find(f => f.id === fid);
-                        const inSzene = ausgewaehltesFeld.figuren?.includes(fid);
-                        const tData = data.figuren_tracking?.[fid]?.[ausgewaehltesFeld.id] || {};
-                        const farbe = getFigurFarbe(fid, data.figuren);
-                        
-                        if (!figur) return null;
-                        return (
-                          <div 
-                            key={fid} 
-                            className={`tracking-sidebar-card ${inSzene ? 'vorhanden' : 'fehlt'}`}
-                            style={inSzene ? { 
-                              background: `linear-gradient(135deg, ${farbe.bg} 0%, ${farbe.bg} 100%)`,
-                              borderColor: farbe.border,
-                              borderLeftWidth: '4px'
-                            } : {}}
-                          >
-                            <div className="tracking-sidebar-header" style={inSzene ? { color: farbe.text } : {}}>
-                              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: farbe.border, marginRight: '6px' }}></span>
-                              👤 {figur.name}
-                              {!inSzene && (
-                                <button className="tracking-add-btn" onClick={() => addFigurToSzene(ausgewaehltesFeld.id, fid)}>+ Hinzufügen</button>
-                              )}
-                            </div>
-                            {inSzene && (
-                              <div className="tracking-sidebar-fields">
-                                <input 
-                                  type="text"
-                                  placeholder="Zustand / Stimmung"
-                                  value={tData.zustand || ''}
-                                  onChange={(e) => updateFigurenTracking(fid, ausgewaehltesFeld.id, 'zustand', e.target.value)}
-                                  style={{ borderColor: farbe.border }}
-                                />
-                                <input 
-                                  type="text"
-                                  placeholder="Was will sie hier?"
-                                  value={tData.will_hier || ''}
-                                  onChange={(e) => updateFigurenTracking(fid, ausgewaehltesFeld.id, 'will_hier', e.target.value)}
-                                  style={{ borderColor: farbe.border }}
-                                />
-                                <input 
-                                  type="text"
-                                  placeholder="Was verändert sich?"
-                                  value={tData.veraenderung || ''}
-                                  onChange={(e) => updateFigurenTracking(fid, ausgewaehltesFeld.id, 'veraenderung', e.target.value)}
-                                  style={{ borderColor: farbe.border }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      
-                      {trackingModus === 'thema' && trackingTargets.map(tid => {
-                        const thema = data.themen.find(t => t.id === tid);
-                        const inSzene = ausgewaehltesFeld.themen?.includes(tid);
-                        const tData = data.themen_tracking?.[tid]?.[ausgewaehltesFeld.id] || {};
-                        const farbe = getThemaFarbe(tid, data.themen);
-                        
-                        if (!thema) return null;
-                        return (
-                          <div 
-                            key={tid} 
-                            className={`tracking-sidebar-card thema ${inSzene ? 'vorhanden' : 'fehlt'}`}
-                            style={inSzene ? { 
-                              background: `linear-gradient(135deg, ${farbe.bg} 0%, ${farbe.bg} 100%)`,
-                              borderColor: farbe.border,
-                              borderLeftWidth: '4px'
-                            } : {}}
-                          >
-                            <div className="tracking-sidebar-header" style={inSzene ? { color: farbe.text } : {}}>
-                              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: farbe.border, marginRight: '6px' }}></span>
-                              💬 {thema.name}
-                              {!inSzene && (
-                                <button className="tracking-add-btn" onClick={() => addThemaToSzene(ausgewaehltesFeld.id, tid)}>+ Hinzufügen</button>
-                              )}
-                            </div>
-                            {inSzene && (
-                              <div className="tracking-sidebar-fields">
-                                <input 
-                                  type="text"
-                                  placeholder="Wie zeigt es sich hier?"
-                                  value={tData.wie_zeigt_es_sich || ''}
-                                  onChange={(e) => updateThemenTracking(tid, ausgewaehltesFeld.id, 'wie_zeigt_es_sich', e.target.value)}
-                                  style={{ borderColor: farbe.border }}
-                                />
-                                {data.wertequadrat && (
-                                  <select 
-                                    value={tData.position_quadrat || ''}
-                                    onChange={(e) => updateThemenTracking(tid, ausgewaehltesFeld.id, 'position_quadrat', e.target.value)}
-                                    className="tracking-quadrat-select"
-                                    style={{ borderColor: farbe.border }}
-                                  >
-                                    <option value="">Position im Wertequadrat...</option>
-                                    <option value="tugend_a">{data.wertequadrat.virtue_a}</option>
-                                    <option value="tugend_b">{data.wertequadrat.virtue_b}</option>
-                                    <option value="extrem_a">{data.wertequadrat.exaggeration_a}</option>
-                                    <option value="extrem_b">{data.wertequadrat.exaggeration_b}</option>
-                                  </select>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  
-                  <button onClick={() => deleteFeld(ausgewaehltesFeld.id)} className="loeschen-btn">🗑️ Löschen</button>
-                </div>
                 </>
               )}
             </div>
@@ -31039,7 +30986,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                       <div key={ui} className="browser-unterkategorie">
                         <div className="unterkategorie-title">{unk.title}</div>
                         <div className="browser-eintraege-list figuren">
-                          {unk.figuren.map((fig, fi) => (
+                          {(unk.figuren || []).map((fig, fi) => (
                             <button 
                               key={fi} 
                               className="browser-eintrag-card"
@@ -31314,7 +31261,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                           onChange={(e) => setSituationFigurA(e.target.value)}
                         >
                           <option value="">— wählen —</option>
-                          {data.figuren.map(f => (
+                          {(data.figuren || []).map(f => (
                             <option key={f.id} value={f.name}>{f.name}</option>
                           ))}
                         </select>
@@ -31328,7 +31275,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                           onChange={(e) => setSituationFigurB(e.target.value)}
                         >
                           <option value="">— wählen —</option>
-                          {data.figuren.map(f => (
+                          {(data.figuren || []).map(f => (
                             <option key={f.id} value={f.name}>{f.name}</option>
                           ))}
                         </select>
