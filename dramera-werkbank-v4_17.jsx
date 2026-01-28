@@ -377,6 +377,7 @@ const WERKZEUG_KATEGORIEN = {
       { id: 'impulsfragen_raum_zeit', name: 'Impulsfragen', icon: '❓' },
       { id: 'setting_place', name: 'Schauplatz', icon: '📍' },
       { id: 'setting_time', name: 'Zeit', icon: '⏰' },
+      { id: 'musik', name: 'Musik & Sound', icon: '🎵' },
     ]
   },
   thema: {
@@ -6702,6 +6703,7 @@ const AutorTool = ({ value, onChange, onAddToSchreibflaeche }) => {
     const lines = [];
     if (value?.name) lines.push(`Autor: ${value.name}`);
     if (value?.email) lines.push(`E-Mail: ${value.email}`);
+    if (value?.website) lines.push(`Web: ${value.website}`);
     if (value?.adresse) lines.push(`Adresse: ${value.adresse}`);
     if (value?.copyright) lines.push(`© ${value.copyright}`);
     return lines.join('\n');
@@ -6729,6 +6731,15 @@ const AutorTool = ({ value, onChange, onAddToSchreibflaeche }) => {
             value={value?.email || ''} 
             onChange={(e) => onChange({ ...value, email: e.target.value })} 
             placeholder="deine@email.ch" 
+          />
+        </div>
+        <div className="field">
+          <label>Website</label>
+          <input 
+            type="url" 
+            value={value?.website || ''} 
+            onChange={(e) => onChange({ ...value, website: e.target.value })} 
+            placeholder="www.deineseite.ch" 
           />
         </div>
         <div className="field">
@@ -6773,6 +6784,27 @@ const TitelTaglineTool = ({ value, onChange, onAddToSchreibflaeche, onWikiClick 
   
   const hasContent = value?.titel || value?.tagline;
   
+  // Titelbild-Upload Handler
+  const handleTitelbildUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      alert('Bitte wähle eine Bilddatei (JPG, PNG, etc.)');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      onChange({ ...value, titelbild: event.target.result });
+    };
+    reader.readAsDataURL(file);
+  };
+  
+  const removeTitelbild = () => {
+    onChange({ ...value, titelbild: null });
+  };
+  
   return (
     <div className="fundament-tool" style={{ position: 'relative' }}>
       <div className="tool-intro-with-wiki">
@@ -6783,6 +6815,51 @@ const TitelTaglineTool = ({ value, onChange, onAddToSchreibflaeche, onWikiClick 
           </button>
         )}
       </div>
+      
+      {/* Titelbild */}
+      <div className="field titelbild-field" style={{ marginBottom: '1rem' }}>
+        <label>Titelbild (für Export)</label>
+        {value?.titelbild ? (
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <img 
+              src={value.titelbild} 
+              alt="Titelbild" 
+              style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '6px', border: '1px solid #ddd' }} 
+            />
+            <button 
+              onClick={removeTitelbild}
+              style={{ 
+                position: 'absolute', top: '-8px', right: '-8px',
+                background: '#ef4444', color: 'white', border: 'none',
+                borderRadius: '50%', width: '24px', height: '24px',
+                cursor: 'pointer', fontSize: '14px'
+              }}
+            >×</button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleTitelbildUpload}
+              style={{ display: 'none' }}
+              id="titelbild-upload"
+            />
+            <label 
+              htmlFor="titelbild-upload"
+              style={{ 
+                padding: '0.5rem 1rem', background: '#f3f4f6', 
+                borderRadius: '6px', cursor: 'pointer', fontSize: '0.9rem',
+                border: '1px dashed #9ca3af'
+              }}
+            >
+              🖼️ Bild hochladen
+            </label>
+            <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>Optional – erscheint auf der Titelseite</span>
+          </div>
+        )}
+      </div>
+      
       <div className="titel-fields">
         <div className="field">
           <WikiLabel field="titel" label="Titel" onInfoClick={setActiveInfoField} />
@@ -12378,6 +12455,116 @@ const ZeitTool = ({ value, onChange, onAddToSchreibflaeche, onWikiClick }) => {
   );
 };
 
+// Musik & Sound Tool
+const MusikTool = ({ value, onChange, onAddToSchreibflaeche }) => {
+  const [neueMusik, setNeueMusik] = useState({ titel: '', beschreibung: '', typ: 'instrumental', einsatz: '' });
+  
+  const musikListe = value?.stuecke || [];
+  
+  const addMusik = () => {
+    if (!neueMusik.titel.trim()) return;
+    const newId = `musik_${Date.now()}`;
+    onChange({
+      ...value,
+      stuecke: [...musikListe, { id: newId, ...neueMusik }]
+    });
+    setNeueMusik({ titel: '', beschreibung: '', typ: 'instrumental', einsatz: '' });
+  };
+  
+  const removeMusik = (id) => {
+    onChange({
+      ...value,
+      stuecke: musikListe.filter(m => m.id !== id)
+    });
+  };
+  
+  const generateText = () => {
+    const lines = ['MUSIK & SOUND', ''];
+    if (value?.konzept) lines.push(`Konzept: ${value.konzept}`, '');
+    musikListe.forEach((m, i) => {
+      lines.push(`${i+1}. ${m.titel} (${m.typ})`);
+      if (m.beschreibung) lines.push(`   ${m.beschreibung}`);
+      if (m.einsatz) lines.push(`   Einsatz: ${m.einsatz}`);
+    });
+    return lines.join('\n');
+  };
+  
+  const hasContent = value?.konzept || musikListe.length > 0;
+  
+  return (
+    <div className="raum-zeit-tool musik-tool">
+      <p className="tool-intro">Musik und Sound sind dramaturgische Werkzeuge. Sie erzeugen Stimmung, verstärken Emotionen und können Leitmotive etablieren.</p>
+      
+      <div className="field">
+        <label>Musikkonzept</label>
+        <textarea 
+          value={value?.konzept || ''} 
+          onChange={(e) => onChange({ ...value, konzept: e.target.value })} 
+          placeholder="Welche Rolle spielt Musik in deinem Stück? Live oder Playback? Welcher Stil?"
+          rows={2}
+        />
+      </div>
+      
+      <div className="musik-sammlung">
+        <h4>Musikstücke & Sounds</h4>
+        {musikListe.map((m, i) => (
+          <div key={m.id} className="musik-eintrag" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: '#f5f3ff', borderRadius: '4px', marginBottom: '0.5rem' }}>
+            <span style={{ flex: 1 }}>
+              <strong>{m.titel}</strong> <span style={{ color: '#7c3aed', fontSize: '0.8rem' }}>({m.typ})</span>
+              {m.beschreibung && <span style={{ color: '#666', display: 'block', fontSize: '0.85rem' }}>{m.beschreibung}</span>}
+              {m.einsatz && <span style={{ color: '#059669', display: 'block', fontSize: '0.85rem' }}>→ {m.einsatz}</span>}
+            </span>
+            <button onClick={() => removeMusik(m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+          </div>
+        ))}
+        
+        <div className="neue-musik" style={{ background: '#fafafa', padding: '0.75rem', borderRadius: '6px', marginTop: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input 
+              type="text" 
+              value={neueMusik.titel} 
+              onChange={(e) => setNeueMusik(p => ({ ...p, titel: e.target.value }))} 
+              placeholder="Titel / Name"
+              style={{ flex: 2 }}
+            />
+            <select 
+              value={neueMusik.typ} 
+              onChange={(e) => setNeueMusik(p => ({ ...p, typ: e.target.value }))}
+              style={{ flex: 1 }}
+            >
+              <option value="instrumental">Instrumental</option>
+              <option value="gesang">Gesang/Lied</option>
+              <option value="sound">Sound/Atmosphäre</option>
+              <option value="leitmotiv">Leitmotiv</option>
+            </select>
+          </div>
+          <input 
+            type="text" 
+            value={neueMusik.beschreibung} 
+            onChange={(e) => setNeueMusik(p => ({ ...p, beschreibung: e.target.value }))} 
+            placeholder="Beschreibung (Stimmung, Instrumente...)"
+            style={{ width: '100%', marginBottom: '0.5rem' }}
+          />
+          <input 
+            type="text" 
+            value={neueMusik.einsatz} 
+            onChange={(e) => setNeueMusik(p => ({ ...p, einsatz: e.target.value }))} 
+            placeholder="Wann einsetzen? (z.B. 'Szene 3, Rapunzels Auftritt')"
+            style={{ width: '100%', marginBottom: '0.5rem' }}
+          />
+          <button onClick={addMusik} className="btn-add-item" style={{ width: '100%' }}>+ Hinzufügen</button>
+        </div>
+      </div>
+      
+      {hasContent && onAddToSchreibflaeche && (
+        <button className="add-to-schreibflaeche-btn" onClick={() => onAddToSchreibflaeche(generateText(), 'musik')}>
+          → Schreibfläche
+        </button>
+      )}
+    </div>
+  );
+};
+
 // =====================================================
 // HAUPTKOMPONENTE
 // =====================================================
@@ -17548,85 +17735,182 @@ WICHTIGE REGELN:
     const lines = [];
     const isHtml = format !== 'txt';
     
-    // Titelblatt
-    lines.push(isHtml ? '<div style="text-align: center; margin-bottom: 3em; page-break-after: always;">' : '');
-    lines.push(isHtml ? `<h1 style="margin-top: 5em;">${data.fundament?.titel || data.projektName || 'TITEL'}</h1>` : '\n\n\n' + (data.fundament?.titel || data.projektName || 'TITEL').toUpperCase());
-    if (data.fundament?.tagline) {
-      lines.push(isHtml ? `<p class="subtitle">"${data.fundament.tagline}"</p>` : `\n"${data.fundament.tagline}"`);
+    // CSS Styles für HTML-Export (wie im Rapunzel-Dokument)
+    if (isHtml) {
+      lines.push(`<style>
+        body { font-family: 'Courier New', Courier, monospace; font-size: 12pt; line-height: 1.5; max-width: 21cm; margin: 0 auto; padding: 2cm; }
+        .titelseite { text-align: center; page-break-after: always; padding-top: 5cm; }
+        .titelseite h1 { font-family: Arial, sans-serif; font-size: 24pt; font-weight: bold; margin-bottom: 0.5em; }
+        .titelseite .untertitel { font-family: Arial, sans-serif; font-size: 14pt; margin: 0.5em 0; }
+        .titelseite .autor { font-family: Arial, sans-serif; font-size: 17pt; margin: 2em 0 0.5em 0; }
+        .titelseite .fassung { font-size: 10pt; margin-top: 3em; }
+        .titelseite .copyright { font-size: 10pt; margin-top: 2em; text-align: left; white-space: pre-line; }
+        .praemisse { text-align: center; font-weight: bold; margin: 2em 0; padding: 1em; }
+        .figuren { page-break-before: always; }
+        .figuren h2 { font-family: Arial, sans-serif; font-size: 14pt; margin-bottom: 1em; }
+        .figur-eintrag { margin-bottom: 1em; }
+        .figur-name { font-weight: bold; }
+        .akt-titel { font-size: 21pt; margin: 40pt 0 20pt 0; letter-spacing: 0.5pt; }
+        .szenen-titel { font-family: Arial, sans-serif; font-size: 14pt; margin: 25pt 0 6pt 0; }
+        .dialog { margin-left: 4cm; text-indent: -4cm; margin-bottom: 10pt; }
+        .dialog .figur { display: inline; }
+        .dialog .text { display: inline; }
+        .regie { font-style: italic; margin-left: 6cm; margin-bottom: 10pt; }
+        .lied { margin-left: 4cm; text-indent: -4cm; padding: 8pt; border: 1px solid #999; background: #e8e8e8; margin-bottom: 6pt; }
+        .musik { margin-left: 4cm; padding: 6pt 10pt; color: #7c3aed; font-style: italic; border-left: 3px solid #7c3aed; background: #f5f3ff; margin-bottom: 6pt; }
+        .sound { margin-left: 4cm; padding: 6pt 10pt; color: #059669; font-style: italic; border-left: 3px solid #059669; background: #ecfdf5; margin-bottom: 6pt; }
+        @media print { .titelseite { page-break-after: always; } .figuren { page-break-before: always; } }
+      </style>`);
     }
-    lines.push(isHtml ? '<p style="margin-top: 3em;">Ein Stück von [Autor:in]</p></div>' : '\n\n\nEin Stück von [Autor:in]\n\n' + '═'.repeat(50));
+    
+    // Titelblatt
+    const titel = data.fundament?.titel || data.projektName || 'TITEL';
+    const untertitel = data.fundament?.untertitel || '';
+    const tagline = data.fundament?.tagline || '';
+    const titelbild = data.fundament?.titelbild || '';
+    const autor = data.autor?.name || '[Autor:in]';
+    const copyright = data.autor?.copyright || '';
+    const email = data.autor?.email || '';
+    const website = data.autor?.website || '';
+    const adresse = data.autor?.adresse || '';
+    
+    if (isHtml) {
+      lines.push('<div class="titelseite">');
+      // Titelbild (falls vorhanden)
+      if (titelbild) {
+        lines.push(`<img src="${titelbild}" alt="Titelbild" style="max-width: 80%; max-height: 400px; margin-bottom: 2em;" />`);
+      }
+      lines.push(`<h1>${titel}</h1>`);
+      if (untertitel) lines.push(`<p class="untertitel">${untertitel}</p>`);
+      lines.push('<p class="untertitel">von</p>');
+      lines.push(`<p class="autor">${autor}</p>`);
+      lines.push(`<p class="fassung">Fassung vom: ${new Date().toLocaleDateString('de-CH')}</p>`);
+      if (copyright || email || adresse) {
+        let copyrightText = 'Alle Rechte bei:\n' + autor;
+        if (adresse) copyrightText += '\n' + adresse;
+        if (email) copyrightText += '\n' + email;
+        if (website) copyrightText += '\n' + website;
+        if (copyright) copyrightText += '\n© ' + copyright;
+        lines.push(`<p class="copyright">${copyrightText}</p>`);
+      }
+      lines.push('</div>');
+    } else {
+      lines.push('\n\n\n' + titel.toUpperCase());
+      if (untertitel) lines.push(untertitel);
+      lines.push('\nvon\n');
+      lines.push(autor);
+      lines.push(`\nFassung vom: ${new Date().toLocaleDateString('de-CH')}`);
+      lines.push('\n' + '═'.repeat(50));
+    }
+    
+    // Prämisse/Tagline
+    if (tagline) {
+      lines.push(isHtml ? `<p class="praemisse">"${tagline}"</p>` : `\n\n"${tagline}"\n`);
+    }
     
     // Figurenverzeichnis
     if (data.figuren && data.figuren.length > 0) {
-      lines.push(isHtml ? '<h2>Figuren</h2>' : '\n\nFIGUREN\n');
+      lines.push(isHtml ? '<div class="figuren"><h2>Die Figuren</h2>' : '\n\nDIE FIGUREN\n');
       data.figuren.forEach(figur => {
-        const details = [];
-        if (figur.alter) details.push(figur.alter);
-        if (figur.beruf) details.push(figur.beruf);
-        const figurLine = `${(figur.name || 'Unbenannt').toUpperCase()}${details.length > 0 ? ', ' + details.join(', ') : ''}`;
-        lines.push(isHtml ? `<p>${figurLine}</p>` : figurLine);
+        const name = (figur.name || 'Unbenannt').toUpperCase();
+        const beschreibung = figur.beschreibung || figur.wesen || '';
+        if (isHtml) {
+          lines.push(`<p class="figur-eintrag"><span class="figur-name">${name}:</span> ${beschreibung}</p>`);
+        } else {
+          lines.push(`\n${name}: ${beschreibung}`);
+        }
       });
-      lines.push(isHtml ? '<hr style="page-break-after: always;">' : '\n' + '─'.repeat(50));
+      lines.push(isHtml ? '</div>' : '\n' + '─'.repeat(50));
+    }
+    
+    // Schauplatz
+    if (data.schauplatz?.hauptort || data.schauplatz?.notizen) {
+      lines.push(isHtml ? '<div class="schauplatz"><h2>Schauplatz</h2>' : '\n\nSCHAUPLATZ\n');
+      if (data.schauplatz.hauptort) lines.push(isHtml ? `<p>${data.schauplatz.hauptort}</p>` : data.schauplatz.hauptort);
+      if (data.schauplatz.notizen) lines.push(isHtml ? `<p>${data.schauplatz.notizen}</p>` : data.schauplatz.notizen);
+      lines.push(isHtml ? '</div>' : '\n' + '─'.repeat(50));
     }
     
     // Szenen (aus Zeitstrahl/Felder)
     if (data.felder && data.felder.length > 0) {
+      let currentAkt = '';
+      
       data.felder.forEach((feld, idx) => {
-        // Header
+        // Akt-Wechsel erkennen
+        if (feld.akt && feld.akt !== currentAkt) {
+          currentAkt = feld.akt;
+          lines.push(isHtml ? `<p class="akt-titel">${feld.akt.toUpperCase()}</p>` : `\n\n\n${feld.akt.toUpperCase()}\n`);
+        }
+        
+        // Szenen-Titel
+        const szenenNr = feld.nummer || (idx + 1);
+        const szenenTitel = feld.titel || '';
         if (isHtml) {
-          lines.push(`<div class="szene">`);
-          lines.push(`<p class="szene-header">SZENE ${idx + 1}</p>`);
-          if (feld.titel) lines.push(`<p class="szene-header">${feld.titel.toUpperCase()}</p>`);
-          if (feld.ort || feld.zeit) {
-            lines.push(`<p class="szene-meta">(${[feld.ort, feld.zeit].filter(Boolean).join(' – ')})</p>`);
-          }
+          lines.push(`<p class="szenen-titel">${szenenNr}. Szene${szenenTitel ? ' – ' + szenenTitel : ''}</p>`);
         } else {
-          lines.push(`\n\nSZENE ${idx + 1}`);
-          if (feld.titel) lines.push(feld.titel.toUpperCase());
-          if (feld.ort || feld.zeit) {
-            lines.push(`(${[feld.ort, feld.zeit].filter(Boolean).join(' – ')})`);
-          }
+          lines.push(`\n${szenenNr}. Szene${szenenTitel ? ' – ' + szenenTitel : ''}`);
         }
         
-        // Inhalt/Dialoge
+        // Ort/Zeit als Regieanweisung
+        if (feld.ort || feld.zeit) {
+          const meta = `(${[feld.ort, feld.zeit].filter(Boolean).join(' – ')})`;
+          lines.push(isHtml ? `<p class="regie">${meta}</p>` : `\n        ${meta}`);
+        }
+        
+        // Inhalt/Dialoge - mit korrekter Formatierung
         if (feld.inhalt) {
-          const content = cleanHtml(feld.inhalt);
-          const dialogLines = content.split('\n');
-          
-          dialogLines.forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed) {
-              lines.push(isHtml ? '' : '');
-              return;
-            }
+          // Parse HTML-Content
+          const tempDiv = typeof document !== 'undefined' ? document.createElement('div') : null;
+          if (tempDiv) {
+            tempDiv.innerHTML = feld.inhalt;
+            const elements = tempDiv.children;
             
-            // Dialog: FIGURNAME: Text oder FIGURNAME (allein auf Zeile)
-            const dialogMatch = trimmed.match(/^([A-ZÄÖÜ][A-ZÄÖÜ\s]*[A-ZÄÖÜ]):?\s*(.*)$/);
-            const regieMatch = trimmed.match(/^\(.*\)$/);
-            
-            if (dialogMatch) {
-              if (isHtml) {
-                lines.push(`<p class="dialog-name">${dialogMatch[1]}</p>`);
-                if (dialogMatch[2]) lines.push(`<p>${dialogMatch[2]}</p>`);
-              } else {
-                lines.push(`\n${dialogMatch[1]}`);
-                if (dialogMatch[2]) lines.push(dialogMatch[2]);
+            for (let el of elements) {
+              const classes = el.className || '';
+              const text = el.textContent?.trim() || '';
+              
+              if (classes.includes('fmt-dialog')) {
+                // Dialog mit Figurenname und Text
+                const figurSpan = el.querySelector('.figur');
+                const textSpan = el.querySelector('.text');
+                const figurName = figurSpan?.textContent?.trim() || '';
+                const dialogText = textSpan?.textContent?.trim() || text;
+                
+                if (isHtml) {
+                  lines.push(`<p class="dialog"><span class="figur">${figurName}</span> <span class="text">${dialogText}</span></p>`);
+                } else {
+                  lines.push(`\n${figurName.padEnd(15)}${dialogText}`);
+                }
+              } else if (classes.includes('fmt-regie')) {
+                lines.push(isHtml ? `<p class="regie">${text}</p>` : `\n                              ${text}`);
+              } else if (classes.includes('fmt-lied')) {
+                const figurSpan = el.querySelector('.figur');
+                const textSpan = el.querySelector('.text');
+                const figurName = figurSpan?.textContent?.trim() || '';
+                const liedText = textSpan?.textContent?.trim() || text;
+                if (isHtml) {
+                  lines.push(`<p class="lied"><span class="figur">${figurName}</span> <span class="text">${liedText}</span></p>`);
+                } else {
+                  lines.push(`\n♪ ${figurName} ${liedText}`);
+                }
+              } else if (classes.includes('fmt-musik')) {
+                lines.push(isHtml ? `<p class="musik">[MUSIK: ${text}]</p>` : `\n[MUSIK: ${text}]`);
+              } else if (classes.includes('fmt-sound')) {
+                lines.push(isHtml ? `<p class="sound">[SOUND: ${text}]</p>` : `\n[SOUND: ${text}]`);
+              } else if (text) {
+                lines.push(isHtml ? `<p>${text}</p>` : text);
               }
-            } else if (regieMatch) {
-              lines.push(isHtml ? `<p class="regieanweisung">${trimmed}</p>` : `\n${trimmed}`);
-            } else {
-              lines.push(isHtml ? `<p>${trimmed}</p>` : trimmed);
             }
-          });
-        } else {
-          // Szene ohne Inhalt - zeige Zusammenfassung
-          if (feld.zusammenfassung) {
-            lines.push(isHtml ? `<p class="regieanweisung">(${feld.zusammenfassung})</p>` : `\n(${feld.zusammenfassung})`);
+          } else {
+            // Fallback: einfacher Text-Export
+            const plainText = feld.inhalt.replace(/<[^>]*>/g, '\n').replace(/\n+/g, '\n');
+            lines.push(plainText);
           }
+        } else if (feld.zusammenfassung) {
+          lines.push(isHtml ? `<p class="regie">(${feld.zusammenfassung})</p>` : `\n(${feld.zusammenfassung})`);
         }
         
-        if (isHtml) lines.push('</div><hr>');
-        else lines.push('\n' + '─'.repeat(50));
+        if (!isHtml) lines.push('\n' + '─'.repeat(50));
       });
     } else {
       lines.push(isHtml ? '<p>(Noch keine Szenen geschrieben)</p>' : '\n(Noch keine Szenen geschrieben)');
@@ -19673,6 +19957,7 @@ STIL:
       // Raum & Zeit
       case 'setting_place': return <SchauplatzTool value={data.schauplatz} onChange={(v) => setData(p => ({ ...p, schauplatz: v }))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
       case 'setting_time': return <ZeitTool value={data.zeit} onChange={(v) => setData(p => ({ ...p, zeit: v }))} onAddToSchreibflaeche={addToSchreibflaeche} onWikiClick={(slug) => { setWikiInitialSlug(slug); setWikiOpen(true); }} />;
+      case 'musik': return <MusikTool value={data.musik} onChange={(v) => setData(p => ({ ...p, musik: v }))} onAddToSchreibflaeche={addToSchreibflaeche} />;
       // Reflexion
       case 'checklisten': return <ReflexionsTool 
         notizen={data.reflexionsNotizen || {}} 
@@ -25197,38 +25482,41 @@ STIL:
           font-family: 'Courier New', Courier, monospace;
           font-size: 12pt;
           font-style: italic;
-          margin-left: 3cm;
-          margin-top: 6pt;
-          margin-bottom: 6pt;
+          margin-left: 6cm;
+          margin-top: 0;
+          margin-bottom: 10pt;
           line-height: 1.3;
           color: #1a1a1a;
           text-decoration: none;
         }
         
+        /* Dialog: Hängender Einzug wie in Pages - Figurenname links, Text eingerückt */
         .szene-editor .fmt-dialog {
           font-family: 'Courier New', Courier, monospace;
           font-size: 12pt;
           margin-top: 0;
-          margin-bottom: 0;
+          margin-bottom: 10pt;
           margin-left: 4cm;
+          text-indent: -4cm;
           line-height: 1.5;
           color: #1a1a1a;
           text-decoration: none;
         }
         .szene-editor .fmt-dialog .figur {
-          display: block;
-          margin-left: -2cm;
-          margin-top: 12pt;
+          display: inline;
+          text-indent: 0;
         }
         .szene-editor .fmt-dialog .text {
-          display: block;
+          display: inline;
+          text-indent: 0;
         }
         .szene-editor .fmt-figurenname {
           font-family: 'Courier New', Courier, monospace;
           font-size: 12pt;
           margin-top: 12pt;
           margin-bottom: 0;
-          margin-left: 2cm;
+          margin-left: 0;
+          text-indent: 0;
           line-height: 1.5;
           color: #1a1a1a;
           font-weight: normal;
@@ -25239,15 +25527,50 @@ STIL:
           color: #6b7280;
         }
         
+        /* Lied: Wie Dialog aber mit Rahmen und grauem Hintergrund */
         .szene-editor .fmt-lied {
           font-family: 'Courier New', Courier, monospace;
           font-size: 12pt;
-          margin-left: 3cm;
+          margin-left: 4cm;
+          text-indent: -4cm;
           margin-top: 6pt;
           margin-bottom: 6pt;
+          padding: 8pt;
           line-height: 1.3;
-          color: #1e3a8a;
+          color: #1a1a1a;
           text-decoration: none;
+          border: 1px solid #999;
+          background: #e8e8e8;
+        }
+        
+        /* Musik-Einsatz */
+        .szene-editor .fmt-musik {
+          font-family: 'Courier New', Courier, monospace;
+          font-size: 12pt;
+          margin-left: 4cm;
+          margin-top: 6pt;
+          margin-bottom: 6pt;
+          padding: 6pt 10pt;
+          line-height: 1.3;
+          color: #7c3aed;
+          font-style: italic;
+          border-left: 3px solid #7c3aed;
+          background: #f5f3ff;
+        }
+        
+        /* Sound-Effekt */
+        .szene-editor .fmt-sound {
+          font-family: 'Courier New', Courier, monospace;
+          font-size: 12pt;
+          margin-left: 4cm;
+          margin-top: 6pt;
+          margin-bottom: 6pt;
+          padding: 6pt 10pt;
+          line-height: 1.3;
+          color: #059669;
+          font-style: italic;
+          border-left: 3px solid #059669;
+          background: #ecfdf5;
         }
         
         .szene-editor .fmt-nebentext {
@@ -29087,6 +29410,8 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         <option value="fmt-nebentext">📝 Nebentext</option>
                         <option value="fmt-vers">📜 Vers</option>
                         <option value="fmt-lied">🎵 Lied</option>
+                        <option value="fmt-musik">🎼 Musik</option>
+                        <option value="fmt-sound">🔊 Sound</option>
                         <option value="fmt-notiz">💡 Notiz</option>
                       </select>
                     </div>
@@ -29294,6 +29619,8 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                           {currentFormat === 'fmt-nebentext' && '📝 Nebentext'}
                           {currentFormat === 'fmt-vers' && '📜 Vers'}
                           {currentFormat === 'fmt-lied' && '🎵 Lied'}
+                          {currentFormat === 'fmt-musik' && '🎼 Musik'}
+                          {currentFormat === 'fmt-sound' && '🔊 Sound'}
                           {currentFormat === 'fmt-notiz' && '💡 Notiz'}
                         </span>
                       ) : (
@@ -30553,7 +30880,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         value={ausgewaehltesFeld.zusammenfassung || ''} 
                         onChange={(e) => updateFeld(ausgewaehltesFeld.id, { zusammenfassung: e.target.value })} 
                         placeholder="Zusammenfassung..." 
-                        rows={2}
+                        rows={4}
                         className="szene-edit-textarea"
                       />
                       <textarea 
