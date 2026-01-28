@@ -16946,9 +16946,21 @@ WICHTIGE REGELN:
   const deleteFromSammlung = (type, id) => setData(p => ({ ...p, [type]: (p[type] || []).filter(i => i.id !== id) }));
   const updateFigur = (updatedFigur) => { setData(p => ({ ...p, figuren: (p.figuren || []).map(f => f.id === updatedFigur.id ? updatedFigur : f) })); setSelectedFigur(updatedFigur); };
 
-  const extrahiereAlsFigur = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, figuren: [...(p.figuren || []), { id: `fig${Date.now()}`, name: s }] })); };
-  const extrahiereAlsThema = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, themen: [...(p.themen || []), { id: `th${Date.now()}`, name: s }] })); };
-  const extrahiereAlsSzene = () => { const s = window.getSelection()?.toString().trim(); if (s) setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), { id: `sz${Date.now()}`, titel: s, notizen: '' }] })); };
+  const extrahiereAlsFigur = () => { 
+    let s = window.getSelection()?.toString().trim(); 
+    if (!s) s = window.prompt('Name der Figur:');
+    if (s) setData(p => ({ ...p, figuren: [...(p.figuren || []), { id: `fig${Date.now()}`, name: s }] })); 
+  };
+  const extrahiereAlsThema = () => { 
+    let s = window.getSelection()?.toString().trim(); 
+    if (!s) s = window.prompt('Name des Themas:');
+    if (s) setData(p => ({ ...p, themen: [...(p.themen || []), { id: `th${Date.now()}`, name: s }] })); 
+  };
+  const extrahiereAlsSzene = () => { 
+    let s = window.getSelection()?.toString().trim(); 
+    if (!s) s = window.prompt('Titel der Szene:');
+    if (s) setData(p => ({ ...p, szenenIdeen: [...(p.szenenIdeen || []), { id: `sz${Date.now()}`, titel: s, notizen: '' }] })); 
+  };
 
   // Speichern-Dialog State
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -25187,13 +25199,19 @@ STIL:
           font-size: 12pt;
           margin-top: 0;
           margin-bottom: 0;
-          margin-left: 6cm;
+          margin-left: 0;
           line-height: 1.5;
           color: #1a1a1a;
           text-decoration: none;
         }
+        .szene-editor .fmt-dialog .figur {
+          display: block;
+          margin-left: 2cm;
+          margin-top: 12pt;
+        }
         .szene-editor .fmt-dialog .text {
           display: block;
+          margin-left: 6cm;
         }
         .szene-editor .fmt-figurenname {
           font-family: 'Courier New', Courier, monospace;
@@ -29287,7 +29305,7 @@ FERTIG GESAMMELT? Zu «Ordnen» wechseln und den Zeitstrahl bauen.
                         onChange={(e) => updateFeld(ausgewaehltesFeld.id, { zusammenfassung: e.target.value })} 
                         className="bearbeiten-textarea zusammenfassung-input" 
                         placeholder="Kurze Beschreibung der Szene..." 
-                        rows={2}
+                        rows={4}
                       />
                     </div>
                     
