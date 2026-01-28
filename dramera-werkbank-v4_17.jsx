@@ -15079,7 +15079,7 @@ const loadSavedState = () => {
 
 const savedState = loadSavedState();
 
-export default function DrameraWerkbank() {
+function DrameraWerkbank() {
   // Lade gespeicherte Daten aus localStorage oder verwende Default
   const [data, setData] = useState(savedState?.data || DEFAULT_DATA);
 
